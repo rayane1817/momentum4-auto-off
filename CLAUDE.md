@@ -28,7 +28,7 @@ Goal: fix or work around the broken auto power-off of the MOMENTUM 4, possibly w
 - 2.13.18: May 2023 (Smart Control 4.3+). Multiple Reddit reports of drain while switched off and cased started here (r/sennheiser 16is8pr, Sep 2023).
 - Smart Control Plus: announced 5 Apr 2025, rebuilt app; old Smart Control kept in parallel; new features only in Plus.
 - 3.37.3: 20 Jan 2026, Plus only (on-head detection, ANC, multipoint toggle, EQ share). Head-Fi reports: powers off while worn, reconnects when taken off, multipoint broken.
-- 3.83.3: mentioned on Reddit (~Aug 2026, failing updates). Unverified.
+- 3.38.3: Ryane's current firmware (22 Oct 2026). The Reddit "3.83.3" (~Aug 2026, failing updates) is very likely this version with digits swapped.
 - No source names a specific Android app version where auto-off broke.
 
 ## User reports (r/sennheiser, read from OCR'd PDFs)
@@ -52,8 +52,12 @@ Goal: fix or work around the broken auto power-off of the MOMENTUM 4, possibly w
 4. Android media-output routing is a separate trigger.
 Timer, sensor and power states live in firmware; the app only writes the timer value. Patching the Android app alone is unlikely to fix true power-off.
 
+## Ryane's device (from app, 22 Oct 2026)
+- Model M4AEBT SE, hardware version 4, firmware 3.38.3, connection type Bluetooth Classic.
+- App: French UI, very likely Smart Control Plus; app version not yet recorded.
+
 ## Test log
-- T1, 22 Oct 2026: latest firmware installed (exact version not yet recorded), auto-off 15 min in app, phone Bluetooth off, headphones untouched for 15 min. Turned phone Bluetooth on: headphones connected immediately => NOT switched off. Cup orientation not recorded.
+- T1, 22 Oct 2026: firmware 3.38.3, auto-off 15 min in app, phone Bluetooth off, headphones untouched for 15 min. Turned phone Bluetooth on: headphones connected immediately => NOT switched off. Cup orientation not recorded.
 - To record on every test: firmware version, app + app version, cup orientation, case or not, result.
 
 ## Next experiments
