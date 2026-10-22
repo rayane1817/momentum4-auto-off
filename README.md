@@ -11,7 +11,7 @@ Unofficial community project. Not affiliated with or endorsed by Sennheiser or S
 | | |
 |---|---|
 | Remote power-off command | Found and confirmed: `0495:0605` |
-| Android app with automatic power-off when idle | Working (v0.5) |
+| Android app with automatic power-off when idle | Confirmed working in v0.3. v0.5 adds a new interface and settings controls, not yet tested on the headphones |
 | PC command-line client (Windows, Linux) | Working |
 | Tested on | One MOMENTUM 4 (M4AEBT SE), firmware 3.38.3, Samsung phone |
 | Other firmware versions or models | Unknown, reports welcome |
