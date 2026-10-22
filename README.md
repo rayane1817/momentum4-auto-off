@@ -73,6 +73,10 @@ Useful reports, ideally as a GitHub issue:
 | `captures/` | logs of the power-off tests |
 | `CLAUDE.md` | lab notebook and full test log |
 
+## License
+
+GPL-3.0, see [`LICENSE`](LICENSE). You may use, change and share the code, as long as modified versions stay open source under the same license.
+
 ## Credits
 
 - [Oein/sennheiser-desktop-client](https://github.com/Oein/sennheiser-desktop-client) and [momentumctl](https://zff.dev/galen/momentumctl), whose protocol work on other Sennheiser models confirmed the framing and several commands.
