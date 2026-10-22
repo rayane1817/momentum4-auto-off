@@ -1,60 +1,74 @@
-# MOMENTUM 4 control protocol (Step 1 result, 22 Oct 2026)
+# MOMENTUM 4 control protocol
 
-Static analysis of Smart Control Plus **1.6.3** (`com.sonova.chb.control`, version code 72844, arm64 XAPK from APKPure, research use only, never installed), cross-checked with two community projects that talk to a real MOMENTUM 4.
+Two sources, merged 22 Oct 2026:
+- **Capture** (ground truth): `captures/btsnoop_hci_202610221800.cfa` (Samsung, SysDump), parsed with `tools/btsnoop_parse.py`. Ryane's M4, firmware 3.38.3, Smart Control Plus.
+- **Static analysis**: Smart Control Plus 1.6.3 (`com.sonova.chb.control`, version code 72844, arm64 XAPK via APKPure, research only, never installed), plus two community projects that talk to an M4 (sources at the end).
+Where they disagree, the capture wins.
 
-## App architecture
+Capture clock note: timestamps decode ~2 h ahead of Brussels local time (e.g. 19:42 in the parser = ~17:42 local).
+
+## App architecture (static)
 - Flutter app. All device logic is Dart, compiled to `lib/arm64-v8a/libapp.so` (Dart 3.10.8, obfuscated symbol names).
-- Java/Kotlin side has no protocol code. `com.sonova.chb.bluetooth_classic` is a generic RFCOMM pipe: Dart passes it a service UUID and raw bytes.
-- An Airoha SDK (`com.airoha.*`, RACE protocol) is bundled for other models. The M4 is Qualcomm and uses GAIA v3.
+- The Java/Kotlin side has no protocol code. `com.sonova.chb.bluetooth_classic` is a generic RFCOMM pipe: Dart passes it a service UUID and raw bytes.
+- An Airoha SDK (`com.airoha.*`, RACE protocol) is bundled for other models. The M4 is Qualcomm (GAIA v3).
 - Device configs moved to `assets/.encrypted/` in 1.6.x (plain JSON in 1.5.0).
-- Tools: jadx 1.5.1, blutter (Dart AOT). Blutter recovered class names, enums and the object pool, but not function bodies for this Dart version. So exact byte values below come from the community sources, not from this APK.
+- Tools: jadx 1.5.1, blutter. Blutter recovered class names, enums and the object pool, but no function bodies for this Dart version, so byte values cannot be read from the code directly.
 
 ## Transport
-- Bluetooth Classic, RFCOMM (SPP-style).
-- Service UUID: `a2129ff3-081b-4c45-8afe-469d9c4842ec` (SDP record named "GAIA").
-- Warning from the ACCENTUM work: on macOS, RFCOMM channel 14 is Apple iAP2. Sending GAIA frames there made the headset power off. Never fall back to a guessed channel. (Possibly useful later, see "Power-off candidates".)
+- Bluetooth Classic, headset MAC 80:C3:BA:4D:6A:24.
+- RFCOMM DLCI 20 (server channel 10): standard Hands-Free Profile AT commands. Not relevant.
+- RFCOMM DLCI 30 (server channel 15): GAIA control channel. Opened by the phone right after connect.
+- Find the channel through SDP, don't hard-code it. Service UUID `a2129ff3-081b-4c45-8afe-469d9c4842ec` (SDP name "GAIA").
+- Warning from the ACCENTUM community work: on macOS, channel 14 was Apple iAP2, and sending GAIA frames there made the headset power off. Never fall back to a guessed channel. (Also listed as a last-resort power-off lead below.)
 
-## Frame format (GAIA v3 over RFCOMM)
-```
-byte 0     0xFF               start of frame
-byte 1     0x03               version/flags
-byte 2-3   payload length     big-endian
-byte 4-5   vendor id          0x0495 Sennheiser, 0x001D Qualcomm core
-byte 6-7   command id         big-endian
-byte 8..   payload
-```
-Command id = feature << 9 | type << 7 | command.
-Type: request 0, notification 1 (`|0x0080`), response 2 (`|0x0100`), error 3 (`|0x0180`).
+## Framing: Qualcomm GAIA v3
+`FF | ver | flags | len | vendor_id (2, BE) | command_id (2, BE) | payload (len bytes)`
+- ver: 0x03 phone->headset, 0x04 headset->phone (observed). Community code treats `FF 03` as start + flags.
+- vendor_id: 0x001D = Qualcomm core; 0x0495 = Sennheiser/Sonova features.
+- command_id = feature << 9 | type << 7 | cmd. type: 0 command, 1 notification (`|0x0080`), 2 response (`|0x0100`), 3 error (`|0x0180`).
 
-Verified example: get battery `FF 03 00 00 04 95 06 03` -> `FF 03 00 01 04 95 07 03 2A` (42 %).
+## Decoded: auto-off timer (vendor 0x0495, feature 3) - capture-confirmed
+Ryane changed the timer 15 -> 30 -> 15 min in the app:
+- GET timer: `FF 03 00 01 04 95 06 01 00` -> response `... 07 01 00 03 84` (0x0384 = 900 s = 15 min)
+- SET timer: `FF 03 00 03 04 95 06 00 00 07 08` (0x0708 = 1800 s = 30 min) -> empty response = OK
+- SET timer: `FF 03 00 03 04 95 06 00 00 03 84` (900 s)
+- Payload: timer id `00` + uint16 big-endian **seconds**.
+- App options: 15, 30, 60 min, Never (`autoPowerOffFifteenMinutes`, `...ThirtyMinutes`, `...SixtyMinutes`, `autoPowerOffNever`). Encoding of "Never" not yet seen (likely 0).
 
-## Commands relevant to us (vendor 0x0495)
-| what | request | response | payload |
+Other feature 3 values read on connect:
+- cmd 3 -> `3C`, also sent as a notification: **battery %** (60 %). Community confirms `0603` = battery GET, `0683` = battery notification.
+- cmd 2 -> `00 00`; cmd 14 -> `03 FF`: unknown.
+
+## Feature map (feature number -> id range -> meaning)
+Meanings from community code, matched to the features seen in the capture.
+
+| feature | ids | meaning | known commands |
 |---|---|---|---|
-| Auto power-off timer SET | `0600` | `0700` | `[timerId 0, value u16]` |
-| Auto power-off timer GET | `0601` | `0701` | |
-| Battery % GET | `0603` | `0703` / notif `0683` | |
-| On-head detection SET / GET | `0400` / `0401` | `0500` / `0501` | `[0/1]` |
-| Smart Pause SET / GET | `080C` / `080D` | `090C` / `090D` | `[0/1]` |
-| Register notifications | `0007` | `0107` | `[featureId]` (battery = 3) |
-| Firmware version GET | `1201` | `1301` | 3 x u16 |
-| Factory reset | `0040` | | do not send |
-| Core: supported features | `001D:0001` | `001D:0101` | |
+| 2 | `04xx` | on-head detection / device settings | `0400` SET, `0401` GET (capture: `01` = on); `0405/0406` BT compatibility |
+| 3 | `06xx` | battery + auto power-off | see above |
+| 4 | `08xx` | generic audio | `0801/0802` voice prompts, `0805/0806` sidetone, `080A/080B` auto-answer, `080C/080D` smart pause, `0814/0815` comfort call |
+| 8 | `10xx` | user EQ | `1000` config, `1001/1002` band SET/GET |
+| 9 | `12xx` | versions / product info | `1201` firmware, `1206` model id |
+| 10 | `14xx` | device management (paired devices) | `1400-1405`. Capture: notification cmd 11 at ~17:51 local, `00 00 00 00 00 00` |
+| 11 | `16xx` | MMI (buttons) | not decoded yet |
+| 12 | `18xx` | transparent hearing | `1804/1805` |
+| 13 | `1Axx` | ANC / noise control | `1A00/1A01` mode, `1A04/1A05` ANC on/off |
+| 16, 19 | `20xx`, `26xx` | seen in capture, unknown | |
 
-Auto power-off lives in feature 3 (battery/power). Unit of `value` (seconds or minutes) is not confirmed: Step 2 capture answers it (15 vs 30 in the app).
+Capture leftovers for feature 2: cmd 2 -> `03`, cmd 6 -> `01`, meaning unknown.
 
-App-side options for the timer: 15, 30, 60 min, Never (`autoPowerOffFifteenMinutes`, `...ThirtyMinutes`, `...SixtyMinutes`, `autoPowerOffNever`).
+Other commands (community, not in capture): register notifications `0007 [featureId]`, factory reset `0040` (never send), Qualcomm core supported features `001D:0001`.
 
-## Does a remote power-off command exist?
-Probably not as a dedicated command. The app's feature registry lists 59 features (AutoPowerOff, Battery, Reboot, FactoryReset, TouchControls, OnHeadDetection, PlaySound, ...). There is **no PowerOff feature** and no power-off button anywhere in the UI strings.
+## Is there a remote power-off command?
+Not in the capture, and not as a dedicated feature in the app. The app's feature registry has 59 entries (AutoPowerOff, Battery, Reboot, FactoryReset, TouchControls, OnHeadDetection, PlaySound, ...) and **no PowerOff feature**. No power-off button in the UI strings either.
 
-### Power-off candidates, best first
-1. **MMI button action `powerOff`.** `Gaia3MmiConfigurationButtonAction` is an enum the app can write to the headset (button remapping), and value 8 is `powerOff`. So the firmware has a power-off action that can be bound to a gesture. Open question: is there a command to *trigger* an MMI action directly, or only to remap one? Capture needed.
-2. **Short timer value.** Write `0600` with the smallest value the firmware accepts. Only helps if the timer path really switches off; T1/T2 say it doesn't on 3.38.3. Low value.
-3. **Reboot (`RebootGaia3FeatureVariant`).** Exists for Gaia3. A reboot ends in "on", so not a fix by itself, but worth knowing the bytes.
+### Power-off leads, best first
+1. **MMI button action `powerOff`.** `Gaia3MmiConfigurationButtonAction` is an enum the app can write to the headset (button remapping), and value 8 is `powerOff`. So the firmware has a power-off action. Open question: can the app trigger an MMI action directly, or only remap a button? Likely feature 11 (`16xx`). Capture the button/touch settings page.
+2. **Short timer value.** Write `0600` with a small value (e.g. 60 s) to test. Only helps if the timer path really switches off; T1/T2 say it only reaches standby on 3.38.3.
+3. **Reboot (`RebootGaia3FeatureVariant`).** Exists for Gaia3. Ends in "on", so not a fix, but worth knowing the bytes.
 4. **iAP2-channel side effect.** Accidental power-off reported on ACCENTUM. A crash, not a feature. Last resort only.
 
 ## Sources
-- APK: Smart Control Plus 1.6.3 via APKPure (`apkeep`). Old Smart Control on APKMirror is behind a Cloudflare challenge, not fetched.
+- APK: Smart Control Plus 1.6.3 via APKPure (`apkeep`).
 - [Oein/sennheiser-desktop-client PROTOCOL.md](https://github.com/Oein/sennheiser-desktop-client/blob/main/PROTOCOL.md) (analysis of Smart Control Plus 1.5.0, verified on ACCENTUM)
 - [momentumctl](https://zff.dev/galen/momentumctl): CLI for MOMENTUM 4 on Linux (BlueZ RFCOMM, same UUID and frames)
