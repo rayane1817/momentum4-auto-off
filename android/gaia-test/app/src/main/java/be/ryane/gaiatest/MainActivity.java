@@ -39,7 +39,7 @@ public class MainActivity extends Activity {
     private Spinner deviceSpinner;
     private TextView log;
     private ScrollView logScroll;
-    private EditText secondsField, hexField, idleMinutesField;
+    private EditText secondsField, hexField, idleMinutesField, levelField;
     private volatile BluetoothSocket socket;
     private volatile OutputStream out;
     // One sender thread keeps frames in the order they were tapped.
@@ -75,6 +75,32 @@ public class MainActivity extends Activity {
         root.addView(row(
                 button("Set limbo (1)", v -> setTimer(1)),
                 button("Set auto-off (0)", v -> setTimer(0))));
+
+        root.addView(label("Config"));
+        root.addView(button("Read all config", v -> readAllConfig()));
+        root.addView(row(
+                button("ANC on", v -> send(Gaia.build(Gaia.SENNHEISER, 0x1A04, (byte) 1))),
+                button("ANC off", v -> send(Gaia.build(Gaia.SENNHEISER, 0x1A04, (byte) 0)))));
+        root.addView(row(
+                button("Transparency on", v -> send(Gaia.build(Gaia.SENNHEISER, 0x1804, (byte) 1))),
+                button("Transparency off", v -> send(Gaia.build(Gaia.SENNHEISER, 0x1804, (byte) 0)))));
+        levelField = new EditText(this);
+        levelField.setInputType(InputType.TYPE_CLASS_NUMBER);
+        levelField.setHint("transparency level, e.g. 40");
+        root.addView(levelField);
+        root.addView(button("Set transparency level", v -> setTransparencyLevel()));
+        root.addView(row(
+                button("Smart pause on", v -> send(Gaia.build(Gaia.SENNHEISER, 0x080C, (byte) 1))),
+                button("Smart pause off", v -> send(Gaia.build(Gaia.SENNHEISER, 0x080C, (byte) 0)))));
+        root.addView(row(
+                button("Auto-answer on", v -> send(Gaia.build(Gaia.SENNHEISER, 0x080A, (byte) 1))),
+                button("Auto-answer off", v -> send(Gaia.build(Gaia.SENNHEISER, 0x080A, (byte) 0)))));
+        root.addView(row(
+                button("Low latency on", v -> send(Gaia.build(Gaia.SENNHEISER, 0x0817, (byte) 1))),
+                button("Low latency off", v -> send(Gaia.build(Gaia.SENNHEISER, 0x0817, (byte) 0)))));
+        root.addView(row(
+                button("Sidetone on", v -> send(Gaia.build(Gaia.SENNHEISER, 0x0805, (byte) 1))),
+                button("Sidetone off", v -> send(Gaia.build(Gaia.SENNHEISER, 0x0805, (byte) 0)))));
 
         root.addView(label("Power off (0605, confirmed)"));
         root.addView(button("POWER OFF NOW", v -> powerOffNow()));
@@ -241,6 +267,47 @@ public class MainActivity extends Activity {
     private BluetoothDevice selectedDevice() {
         int i = deviceSpinner.getSelectedItemPosition();
         return (i >= 0 && i < devices.size()) ? devices.get(i) : null;
+    }
+
+    private void readAllConfig() {
+        if (out == null) {
+            toast("Connect first");
+            return;
+        }
+        // All GETs; responses decode in the log as they arrive.
+        int[] gets = {
+                0x1A05, // ANC on/off
+                0x1A01, // noise mode (triples)
+                0x1A03, // transparency level
+                0x1805, // transparent hearing status
+                0x0806, // sidetone
+                0x080D, // smart pause
+                0x080B, // auto-answer
+                0x0818, // low latency
+                0x0800, // codec
+                0x0802, // voice prompts
+                0x0603, // battery
+                0x1206, // model
+        };
+        for (int g : gets) send(Gaia.build(Gaia.SENNHEISER, g));
+    }
+
+    private void setTransparencyLevel() {
+        if (out == null) {
+            toast("Connect first");
+            return;
+        }
+        try {
+            int lvl = Integer.parseInt(levelField.getText().toString().trim());
+            if (lvl < 0 || lvl > 255) {
+                toast("0 to 255");
+                return;
+            }
+            send(Gaia.build(Gaia.SENNHEISER, 0x1A02, (byte) lvl));
+            send(Gaia.build(Gaia.SENNHEISER, 0x1A03));   // read back
+        } catch (NumberFormatException e) {
+            toast("Enter a level");
+        }
     }
 
     private void powerOffNow() {

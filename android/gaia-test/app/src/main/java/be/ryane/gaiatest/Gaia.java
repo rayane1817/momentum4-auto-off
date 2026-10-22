@@ -111,9 +111,57 @@ final class Gaia {
             s.append("  => timer set OK");
         } else if (f.vendor == SENNHEISER && base == 0x0603 && type != 3 && f.payload.length >= 1) {
             s.append("  => battery ").append(f.payload[f.payload.length - 1] & 0xFF).append(" %");
-        } else if (type == 3) {
-            s.append("  => headset refused this command");
+        } else if (f.vendor == SENNHEISER && type != 3) {
+            String d = decodeConfig(base, f.payload);
+            if (d != null) s.append("  => ").append(d);
         }
+        if (type == 3) {
+            s.append("  => refused (").append(f.payload.length >= 1 ? errName(f.payload[0] & 0xFF) : "?").append(")");
+        }
+        return s.toString();
+    }
+
+    private static String errName(int code) {
+        if (code == 1) return "not supported";
+        if (code == 5) return "invalid parameter";
+        return "code " + code;
+    }
+
+    /** Human-readable decode of config GET responses / notifications. base = command with type bits cleared. */
+    private static String decodeConfig(int base, byte[] p) {
+        int b0 = p.length >= 1 ? p[0] & 0xFF : -1;
+        switch (base) {
+            case 0x1A05: return "ANC " + onOff(b0);                                  // ANC on/off
+            case 0x1A03: return "transparency level = " + b0;                        // 0x28 = 40 seen
+            case 0x1805: return "transparent hearing " + onOff(b0);
+            case 0x1A01:                                                             // combined mode: (mode,state) triples
+                StringBuilder m = new StringBuilder("noise mode:");
+                for (int i = 0; i + 1 < p.length; i += 2) {
+                    m.append(' ').append(modeName(p[i] & 0xFF)).append('=').append(p[i + 1] & 0xFF);
+                }
+                return m.toString();
+            case 0x0806: return "sidetone " + onOff(b0);
+            case 0x080D: return "smart pause " + onOff(b0);
+            case 0x080B: return "auto-answer calls " + onOff(b0);
+            case 0x0815: return "comfort call " + onOff(b0);
+            case 0x0818: return "low latency " + onOff(b0);
+            case 0x0802: return "voice/tone prompts mode = " + b0;
+            case 0x0800: return "codec = " + b0;
+            case 0x1206: return "model = " + ascii(p);
+            case 0x1301: case 0x1302: return "version = " + hex(p);
+            default: return null;
+        }
+    }
+
+    private static String onOff(int v) { return v == 1 ? "ON" : v == 0 ? "off" : "?(" + v + ")"; }
+
+    private static String modeName(int m) {
+        switch (m) { case 1: return "antiWind"; case 2: return "transparency"; case 3: return "adaptive"; default: return "m" + m; }
+    }
+
+    private static String ascii(byte[] p) {
+        StringBuilder s = new StringBuilder();
+        for (byte x : p) { if (x == 0) break; if (x >= 32 && x < 127) s.append((char) x); }
         return s.toString();
     }
 
