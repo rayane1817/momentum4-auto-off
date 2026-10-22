@@ -37,6 +37,7 @@ Result: Flutter app, GAIA v3 over RFCOMM (UUID a2129ff3-081b-4c45-8afe-469d9c484
 4. Turn the snoop log off.
 
 ## Step 3: match and test
+0. First test (from old app analysis): read and set the LIMBO_TIMEOUT timer (timer 1), see docs/protocol.md "Timers: the key finding".
 1. Wireshark: filter on the headphones' MAC, RFCOMM (or ATT) payloads at the noted times. Match bytes against docs/protocol.md.
 2. Minimal test client (Python on a laptop with Bluetooth, or a tiny Android app) that connects and replays the timer command with a new value. If that works, try the power-off command if one exists.
 

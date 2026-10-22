@@ -73,6 +73,7 @@ Timer, sensor and power states live in firmware; the app only writes the timer v
 ## Chosen route (22 Oct 2026)
 Decompile the official APK + Bluetooth HCI logging, then build our own small Android app that triggers the real switch-off when idle. Full plan: docs/re-plan.md. Start there.
 Step 1 done (22 Oct 2026): docs/protocol.md. GAIA v3 over RFCOMM, vendor 0x0495, timer cmd 0600/0601. No dedicated power-off command; lead = MMI action `powerOff`. Next: Step 2 HCI capture by Ryane.
+Old Smart Control 4.0.0 (oldest on mirrors, already supports M4 + auto-off) analysed: timer cmd takes a timer number, 0 = POWER_OFF_TIMER, 1 = LIMBO_TIMEOUT (never set by any app). Hypothesis: auto-off only reaches Qualcomm "limbo"; limbo timeout decides true power-off. First test: read timer 1 (`FF 03 00 01 04 95 06 01 01`), set it short, repeat T2. Never send 0495:0200 (enter DFU) or 0040 (factory reset).
 
 ## Other build directions considered
 - Hardware workaround: a magnet on a desk stand/hook at the spot where the case magnet sits, to trigger the case switch-off (r/sennheiser 154aet4 user tried this). Needs locating the Hall sensor.
