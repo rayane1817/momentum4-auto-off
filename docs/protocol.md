@@ -113,6 +113,40 @@ Pattern: TAP_1, TAP_2, TAP_3, LONG_PRESS. Button: LEFT, RIGHT. (Numeric values f
 TW1, TW2 and CX400 (Qualcomm GAIA v1/v2) have a real remote power-off in the old app ("switchoff_title" tile with a confirm dialog): `Control_SetPowerState`, vendor `0x000A`, command `0x0204`, payload `00` = off, `01` = on. This is Qualcomm's legacy GAIA "Set Power State" command. The M4 config never lists it, and GAIA v3 framing differs, so it probably doesn't exist on the M4. It's cheap to try once as a long shot.
 **Result T7 (fw 3.38.3): not supported.** Both framings answer `000A:8204 [01]` (legacy ack bit 0x8000, status 01 = not supported). The firmware still parses legacy vendor 000A frames, it just doesn't implement this one.
 
+## Power-off search: candidate list (Step 2)
+Goal: find a GAIA command that fully powers the M4 off (same state as case/button). The sweep is scoped to features identified as power/system, never all features. The merged command map below comes from the old app `m4.json` (4.0.0 + 4.9.3) plus the capture; the new Flutter app's byte values were not statically recoverable, so its named features (`Reboot`, `AutoPowerOff`) are mapped only where the ID is otherwise known.
+
+### Features identified as power/system (sweep scope)
+| vendor | feature | id range | role | known request cmds | unknown request cmds to probe |
+|---|---|---|---|---|---|
+| 0495 | 3 | `0600-067F` | **power / battery / timer** | `0600` set timer, `0601` get timer, `0602` charging, `0603` battery | `0604-067F` (prime target) |
+| 0495 | 2 | `0400-047F` | on-head / physical state / BT | `0400/0401` on-head, `0402` physical state, `0405/0406` BT compat | `0403/0404`, `0407-047F` |
+| 0495 | 0 | `0000-007F` | config / system | `0007` reg-notif, `0041` primary side | `0042-007F` (NOT `0040` = factory reset) |
+| 001D | 0 | `0000-007F` | Qualcomm core | `0000-000D` (api, features, serial, transport) | `000E-007F` (QC core may hold a device-reset) |
+
+Features **16 (`20xx`) and 19 (`26xx`)** were seen in the capture but are not in any app's command map. They are new to the later M4 firmware and could hold `Reboot` or a new power command, but their contents are unknown, so they are NOT in the default blind-sweep scope. Identify them first (read-style probes, watched closely) before sweeping. Treat as a separate, lower-priority, higher-care step.
+
+### Ranking (most likely first)
+1. **0495 feature 3, `0604-060F`** — adjacent to the timer/battery commands; a "power off now" or "enter dormant" would most naturally live here.
+2. **001D core, device-reset range** — Qualcomm's core plugin on many QCC chips has a reset/reboot; worth probing `000E-001F`.
+3. **0495 feature 2, `0403/0404`** — between physical-state and BT-compat; could be a state-force command.
+4. **0495 feature 0, `0042-004F`** — config/system, near primary-side.
+5. **Features 16/19** — unknown; identify, do not blind-sweep by default.
+
+### Probe method and success test
+- Send a type-0 request with **empty payload** (`FF 03 00 00 <vendor> <cmd>`). Replies: error `01` = command does not exist (skip); error `05` = exists but needs params (note, interesting); `resp [..]` = did something / returned data; a no-param action (reboot/power) would just execute.
+- Max one command per second.
+- **Success** = the RFCOMM/ACL link drops AND reconnects fail for 60 s. Then stop, report the command, wait for the human to confirm the headset is off (red LED 3x, stays off).
+- Link drops but reconnect succeeds = reset/disconnect, not power-off: log and continue.
+- An empty-payload action is why unknown features (16/19) are out of the default scope: an unknown no-param action would execute blind.
+
+### Hard exclusions (the tool refuses these regardless of input)
+- `0495:0040` factory reset.
+- `0495` feature 1 (`0200-03FF`) firmware upgrade / DFU mode.
+- `0495:1405` delete paired device, `0495:1406` delete pairing list.
+- `001D` feature 6 (`0C00-0DFF`) Qualcomm upgrade.
+- Device rename (ID unknown for M4; the tool blocks it if identified).
+
 ## Is there a remote power-off command?
 Not in the capture, and not as a dedicated feature in the app. The app's feature registry has 59 entries (AutoPowerOff, Battery, Reboot, FactoryReset, TouchControls, OnHeadDetection, PlaySound, ...) and **no PowerOff feature**. No power-off button in the UI strings either.
 
