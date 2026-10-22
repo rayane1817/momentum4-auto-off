@@ -52,9 +52,9 @@ Goal: fix or work around the broken auto power-off of the MOMENTUM 4, possibly w
 4. Android media-output routing is a separate trigger.
 Timer, sensor and power states live in firmware; the app only writes the timer value. Patching the Android app alone is unlikely to fix true power-off.
 
-## Test in progress (22 Oct 2026, Ryane)
-- Latest firmware installed, phone Bluetooth off, auto-off set to 15 min, waiting out a 15-min timer without touching the headphones.
-- Check: turn phone Bluetooth on without touching them. Instant connect = not off. Record how they were put down (cups up/down).
+## Test log
+- T1, 22 Oct 2026: latest firmware installed (exact version not yet recorded), auto-off 15 min in app, phone Bluetooth off, headphones untouched for 15 min. Turned phone Bluetooth on: headphones connected immediately => NOT switched off. Cup orientation not recorded.
+- To record on every test: firmware version, app + app version, cup orientation, case or not, result.
 
 ## Next experiments
 - Cups up vs down.
