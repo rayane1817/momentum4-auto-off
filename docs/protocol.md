@@ -111,6 +111,7 @@ Pattern: TAP_1, TAP_2, TAP_3, LONG_PRESS. Button: LEFT, RIGHT. (Numeric values f
 
 ### Remote power-off on other Sennheiser products
 TW1, TW2 and CX400 (Qualcomm GAIA v1/v2) have a real remote power-off in the old app ("switchoff_title" tile with a confirm dialog): `Control_SetPowerState`, vendor `0x000A`, command `0x0204`, payload `00` = off, `01` = on. This is Qualcomm's legacy GAIA "Set Power State" command. The M4 config never lists it, and GAIA v3 framing differs, so it probably doesn't exist on the M4. It's cheap to try once as a long shot.
+**Result T7 (fw 3.38.3): not supported.** Both framings answer `000A:8204 [01]` (legacy ack bit 0x8000, status 01 = not supported). The firmware still parses legacy vendor 000A frames, it just doesn't implement this one.
 
 ## Is there a remote power-off command?
 Not in the capture, and not as a dedicated feature in the app. The app's feature registry has 59 entries (AutoPowerOff, Battery, Reboot, FactoryReset, TouchControls, OnHeadDetection, PlaySound, ...) and **no PowerOff feature**. No power-off button in the UI strings either.
