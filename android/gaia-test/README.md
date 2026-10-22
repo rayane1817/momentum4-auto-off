@@ -13,14 +13,15 @@ Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control cha
 3. Open "M4 GAIA test", allow "Nearby devices", pick the MOMENTUM 4, tap Connect.
 4. Tap the buttons, then "Copy log" and paste the log in the chat.
 
-## Power off and auto power-off (v0.2)
+## Power off and auto power-off (v0.3)
 The confirmed remote switch-off is `0495:0605` (tests T8-T10). Two ways to use it:
 
 - **POWER OFF NOW** button: connect, tap it, confirm. The headphones switch off fully (same as the case or a 3 s button hold). They can only be turned back on with the button, never remotely.
-- **Auto power-off when idle**: a background guard that sends `0605` after the headphones are unused for the set minutes. Set the minutes, keep "Require off-head" ticked (safer), tap "Start idle guard". It runs as a notification you can see; the app's own connection closes so the guard can hold the control channel.
-  - Idle = not worn AND no audio, for the whole window. Any sign of use resets the timer. It never fires on an unknown state.
-  - "Require off-head" needs the headset to answer the on-head query. If it doesn't on this firmware, the guard says so and will not fire; untick the box only if you accept it firing on audio-silence alone (riskier: pausing music while worn could switch them off).
-  - This is the one part not yet tested on a headset. Try it with a short time (e.g. 2 min) first and watch the notification.
+- **Auto power-off when idle**: a background guard that sends `0605` after the headphones are idle for the set minutes. Set the minutes, tap "Start idle guard". It runs as a notification; tap "Show guard log" to see what it is doing.
+  - **Idle is judged from the phone, not the headset:** idle = no audio actually playing (Android's "music active") AND no call in progress. This is deliberate. The headset's own on-head sensor reports on-head even when the M4 is on a desk (T-series), and Android keeps the audio route open when nothing plays, so both headset-side signals are useless here. Any audio or call resets the clock.
+  - The guard does NOT hold the control channel while waiting. It only connects to the headset at the moment it powers them off, so they (and Smart Control Plus) stay usable until then.
+  - Downside of the phone-side rule: if you wear them in silence (ANC, no audio) past the timeout, they will switch off. Recoverable with the button. Raise the timeout if that bothers you.
+  - Not yet confirmed on a headset end to end. Test with a short time (e.g. 2 min), play nothing, and watch "Show guard log".
 
 ## Test plan (limbo timer)
 1. Tap "Auto-off timer (0)": expect 900 s.

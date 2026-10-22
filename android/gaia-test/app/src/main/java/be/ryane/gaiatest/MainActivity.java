@@ -16,7 +16,6 @@ import android.text.InputType;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -41,7 +40,6 @@ public class MainActivity extends Activity {
     private TextView log;
     private ScrollView logScroll;
     private EditText secondsField, hexField, idleMinutesField;
-    private CheckBox requireOffHead;
     private volatile BluetoothSocket socket;
     private volatile OutputStream out;
     // One sender thread keeps frames in the order they were tapped.
@@ -81,19 +79,16 @@ public class MainActivity extends Activity {
         root.addView(label("Power off (0605, confirmed)"));
         root.addView(button("POWER OFF NOW", v -> powerOffNow()));
 
-        root.addView(label("Auto power-off when idle"));
+        root.addView(label("Auto power-off when idle (no audio / no call)"));
         idleMinutesField = new EditText(this);
         idleMinutesField.setInputType(InputType.TYPE_CLASS_NUMBER);
         idleMinutesField.setHint("idle minutes, e.g. 15");
         idleMinutesField.setText("15");
         root.addView(idleMinutesField);
-        requireOffHead = new CheckBox(this);
-        requireOffHead.setText("Require off-head (safer; needs working sensor)");
-        requireOffHead.setChecked(true);
-        root.addView(requireOffHead);
         root.addView(row(
                 button("Start idle guard", v -> startIdle()),
                 button("Stop idle guard", v -> stopIdle())));
+        root.addView(button("Show guard log", v -> append(AutoOffService.getLog())));
 
         root.addView(label("Raw frame (hex)"));
         hexField = new EditText(this);
@@ -282,12 +277,12 @@ public class MainActivity extends Activity {
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 2);
         }
-        // The service needs the GAIA channel, so free it here first.
+        // Free the channel so the guard can connect cleanly when it fires.
         closeQuietly();
-        AutoOffService.start(this, device.getAddress(), minutes * 60_000L, requireOffHead.isChecked());
-        append("Idle guard started: off after " + minutes + " min unused"
-                + (requireOffHead.isChecked() ? " (off-head required)." : " (audio-only, riskier).")
-                + " Watch the notification. This app's own connection is now closed so the guard can hold the channel.");
+        AutoOffService.start(this, device.getAddress(), minutes * 60_000L);
+        append("Idle guard started: powers off after " + minutes
+                + " min with no audio playing and no call. Watch the notification, or tap 'Show guard log'."
+                + " It only connects to the headset at the moment it powers off, so they stay usable until then.");
     }
 
     private void stopIdle() {
