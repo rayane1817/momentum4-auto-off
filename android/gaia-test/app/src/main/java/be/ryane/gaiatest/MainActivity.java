@@ -78,15 +78,18 @@ public class MainActivity extends Activity {
 
         root.addView(label("Config"));
         root.addView(button("Read all config", v -> readAllConfig()));
+        // ANC and transparency are mutually exclusive on the M4; set them in pairs.
         root.addView(row(
-                button("ANC on", v -> send(Gaia.build(Gaia.SENNHEISER, 0x1A04, (byte) 1))),
-                button("ANC off", v -> send(Gaia.build(Gaia.SENNHEISER, 0x1A04, (byte) 0)))));
-        root.addView(row(
-                button("Transparency on", v -> send(Gaia.build(Gaia.SENNHEISER, 0x1804, (byte) 1))),
-                button("Transparency off", v -> send(Gaia.build(Gaia.SENNHEISER, 0x1804, (byte) 0)))));
+                button("ANC on", v -> { send(Gaia.build(Gaia.SENNHEISER, 0x1804, (byte) 0));
+                                        send(Gaia.build(Gaia.SENNHEISER, 0x1A04, (byte) 1)); }),
+                button("Transparency on", v -> { send(Gaia.build(Gaia.SENNHEISER, 0x1A04, (byte) 0));
+                                                 send(Gaia.build(Gaia.SENNHEISER, 0x1804, (byte) 1)); })));
+        root.addView(button("Noise control off (both)", v -> {
+                send(Gaia.build(Gaia.SENNHEISER, 0x1A04, (byte) 0));
+                send(Gaia.build(Gaia.SENNHEISER, 0x1804, (byte) 0)); }));
         levelField = new EditText(this);
         levelField.setInputType(InputType.TYPE_CLASS_NUMBER);
-        levelField.setHint("transparency level, e.g. 40");
+        levelField.setHint("transparency level 0-100, e.g. 40");
         root.addView(levelField);
         root.addView(button("Set transparency level", v -> setTransparencyLevel()));
         root.addView(row(
@@ -288,6 +291,8 @@ public class MainActivity extends Activity {
                 0x0802, // voice prompts
                 0x0603, // battery
                 0x1206, // model
+                0x1201, // release version
+                0x1200, // hw revision
         };
         for (int g : gets) send(Gaia.build(Gaia.SENNHEISER, g));
     }
@@ -299,8 +304,8 @@ public class MainActivity extends Activity {
         }
         try {
             int lvl = Integer.parseInt(levelField.getText().toString().trim());
-            if (lvl < 0 || lvl > 255) {
-                toast("0 to 255");
+            if (lvl < 0 || lvl > 100) {
+                toast("0 to 100");
                 return;
             }
             send(Gaia.build(Gaia.SENNHEISER, 0x1A02, (byte) lvl));

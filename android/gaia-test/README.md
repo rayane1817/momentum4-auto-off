@@ -13,6 +13,13 @@ Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control cha
 3. Open "M4 GAIA test", allow "Nearby devices", pick the MOMENTUM 4, tap Connect.
 4. Tap the buttons, then "Copy log" and paste the log in the chat.
 
+## Config controls (v0.4)
+A "Config" section exposes the reversible settings, with every reply decoded in the log. See `../docs/config-spec.md` for the exact commands and what was verified against the capture.
+- **Read all config**: reads ANC, transparency, smart pause, auto-answer, low latency, sidetone, codec, voice prompts, battery, model, firmware, hardware revision.
+- **ANC / Transparency**: on the M4 these are mutually exclusive, so each button sets both toggles together ("ANC on" = transparency off + ANC on, etc.). "Noise control off (both)" is the neutral state. "Set transparency level" takes 0-100.
+- **Smart pause, Auto-answer, Low latency, Sidetone**: on/off.
+- Anti-wind and adaptive ANC sub-modes are NOT exposed yet: their set command (`1A00`) was never captured, so it is unconfirmed. To add them safely, toggle them in Smart Control Plus with HCI logging on and capture the bytes. Details in `../docs/config-spec.md`.
+
 ## Power off and auto power-off (v0.3)
 The confirmed remote switch-off is `0495:0605` (tests T8-T10). Two ways to use it:
 

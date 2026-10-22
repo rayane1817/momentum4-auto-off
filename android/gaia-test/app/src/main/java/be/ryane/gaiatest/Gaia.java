@@ -147,8 +147,12 @@ final class Gaia {
             case 0x0818: return "low latency " + onOff(b0);
             case 0x0802: return "voice/tone prompts mode = " + b0;
             case 0x0800: return "codec = " + b0;
+            case 0x1200: return "hw revision = " + b0;
+            case 0x1201: return "release version = " + ascii(p);
+            case 0x1202:                                                            // firmware: 3 x u16 BE
+                if (p.length >= 6) return "firmware = " + u16(p, 0) + "." + u16(p, 2) + "." + u16(p, 4);
+                return "firmware = " + hex(p);
             case 0x1206: return "model = " + ascii(p);
-            case 0x1301: case 0x1302: return "version = " + hex(p);
             default: return null;
         }
     }
