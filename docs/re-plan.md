@@ -14,7 +14,9 @@ Route chosen by Ryane: decompile the official APK + Bluetooth HCI logging. Not t
 - Case switch-off is immediate and works (T3). Probably triggered locally by a magnet/Hall sensor, so the capture may only show a disconnect. Do not expect a "case" command on the wire.
 - Auto-off timer leaves the radio active (T1, T2).
 
-## Step 1: static analysis (cloud session)
+## Step 1: static analysis (cloud session) - DONE 22 Oct 2026, see docs/protocol.md
+Result: Flutter app, GAIA v3 over RFCOMM (UUID a2129ff3-081b-4c45-8afe-469d9c4842ec), vendor 0x0495. Timer SET/GET = 0600/0601. No dedicated power-off command found; best lead is the MMI button action `powerOff` (value 8). Byte values for Reboot/MMI not recoverable statically (blutter gives no code bodies for Dart 3.10.8), so Step 2 matters.
+
 1. Get APKs: Smart Control Plus `com.sonova.chb.control` (APKPure/APKMirror); also an old Smart Control (APKMirror 4.5.0 to 4.9.3) for comparison.
 2. `jadx -d out/ app.apk` (or jadx-gui). Check for split APKs / native libs (`lib/*.so`); protocol code might be in native code.
 3. Search: "autoOff", "auto_off", "powerOff", "power_off", "switchOff", "standby", "shutdown", "timeout", "onHead", "rfcomm", "UUID", "SPP", "gaia".
@@ -28,11 +30,14 @@ Route chosen by Ryane: decompile the official APK + Bluetooth HCI logging. Not t
    b. auto-off timer 15 > 30 > 15
    c. on-head detection off > on
    d. any power-off / switch-off option in the app, if it exists
+   d2. button / touch control settings: open the page, change any option, change it back (looking for the MMI config command)
+   d3. anything that says "restart" / "Apply & Restart" (looking for the Reboot command)
    e. put the headphones in the case (expect disconnect)
 3. `adb bugreport bugreport.zip`, extract `btsnoop_hci.log`, add it to the repo under `captures/` (private repo).
 4. Turn the snoop log off.
 
 ## Step 3: match and test
+0. First test (from old app analysis): read and set the LIMBO_TIMEOUT timer (timer 1), see docs/protocol.md "Timers: the key finding".
 1. Wireshark: filter on the headphones' MAC, RFCOMM (or ATT) payloads at the noted times. Match bytes against docs/protocol.md.
 2. Minimal test client (Python on a laptop with Bluetooth, or a tiny Android app) that connects and replays the timer command with a new value. If that works, try the power-off command if one exists.
 
@@ -41,5 +46,6 @@ Route chosen by Ryane: decompile the official APK + Bluetooth HCI logging. Not t
 - Only if a power-off command exists. If none exists, fallback options: very short timer value tests, or the magnet workaround.
 
 ## Open questions
-- Does a remote power-off command exist at all? (Step 1 answers this.)
-- Is the protocol in Java/Kotlin or native code?
+- Is there a command to trigger an MMI action (powerOff) directly, or only to remap a button? Step 2 d2.
+- Timer value unit (s or min)? Step 2 b.
+- Answered: protocol is in Dart (libapp.so); no dedicated power-off feature in the app.

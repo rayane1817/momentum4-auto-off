@@ -1,0 +1,7 @@
+23:27:05.017 # log file: logs\gaia_20261022_232705.log
+23:27:05.017 # connecting to 80:C3:BA:4D:6A:24
+23:27:05.164 # connected on RFCOMM channel 15
+23:27:05.165 -> FF 03 00 00 04 95 06 05
+23:27:05.189 <- 0495:0705 resp []
+23:27:05.427 # link closed by headset
+23:27:05.427 # done

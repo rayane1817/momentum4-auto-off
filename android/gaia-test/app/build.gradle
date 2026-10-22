@@ -1,0 +1,21 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'be.ryane.gaiatest'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'be.ryane.gaiatest'
+        minSdk 26
+        targetSdk 35
+        versionCode 5
+        versionName '0.5'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    buildTypes {
+        // Debug-signed release is fine for a personal sideloaded test tool.
+        release { minifyEnabled false; signingConfig signingConfigs.debug }
+    }
+}
