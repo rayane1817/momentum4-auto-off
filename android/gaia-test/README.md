@@ -13,6 +13,9 @@ Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control cha
 3. Open "M4 GAIA test", allow "Nearby devices", pick the MOMENTUM 4, tap Connect.
 4. Tap the buttons, then "Copy log" and paste the log in the chat.
 
+## UI (v0.5)
+Redesigned to a clean card layout (spec: `../docs/ux-spec.md`): a header with a Connected/Disconnected pill, device picker and Connect/Disconnect; a DEVICE card (battery, model, firmware, hardware); a NOISE CONTROL card with a 3-way ANC / Transparency / Off segmented control and a transparency slider; a LISTENING card of switches (smart pause, auto-answer, low latency, sidetone); a prominent AUTO POWER-OFF card (default 15 min, Start/Stop, "start automatically when the app opens"); a red POWER OFF NOW; and collapsed ADVANCED (firmware timer, raw hex) and LOG sections. Controls grey out when disconnected. The idle-guard card stays usable while disconnected (the guard connects on its own).
+
 ## Config controls (v0.4)
 A "Config" section exposes the reversible settings, with every reply decoded in the log. See `../docs/config-spec.md` for the exact commands and what was verified against the capture.
 - **Read all config**: reads ANC, transparency, smart pause, auto-answer, low latency, sidetone, codec, voice prompts, battery, model, firmware, hardware revision.
