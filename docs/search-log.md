@@ -30,8 +30,16 @@ Command: `python gaia_client.py raw "FF 03 00 00 04 95 06 05" --channel 15`
 Checked on the headset: fully off again.
 Log: captures/gaia_replicate_0605_20261022_232705.log
 
+## 22 Oct 2026 23:44, with the phone connected for audio (T10)
+Phone connected to the M4 for audio, Smart Control Plus force-stopped.
+Command: `python gaia_client.py raw "FF 03 00 00 04 95 06 05" --channel 15`
+- 23:44:34.431 sent, 23:44:34.456 `0495:0705 resp []`, 23:44:34.741 link closed by headset.
+- `verify` at 23:44:44, 23:45:05, 23:45:25: all failed to connect (timed out).
+Checked on the headset: fully off.
+Log: captures/gaia_phone_connected_0605_20261022_234434.log
+
 ## Result
-`0495:0605` with an empty payload switches the MOMENTUM 4 fully off. The `0q` (Qualcomm core) sweep was not needed and not run.
+`0495:0605` with an empty payload switches the MOMENTUM 4 fully off, also while the phone holds the audio link. Once off, the Bluetooth radio is off, so it cannot be switched back on remotely; wake it with the button. The `0q` (Qualcomm core) sweep was not needed and not run.
 
 ## Windows transport notes (first hardware run)
 - Stock Windows CPython has no `socket.AF_BLUETOOTH`. The client now opens RFCOMM through WinSock `AF_BTH` with ctypes; Linux still uses `AF_BLUETOOTH`.
