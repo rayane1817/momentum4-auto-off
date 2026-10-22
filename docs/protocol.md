@@ -94,7 +94,10 @@ Package `com.sennheiser.control`. APKPure has 4.0.0 to 4.9.3 (release dates not 
 
 In Qualcomm's headset firmware (ADK), "limbo" is the state where the application is logically off but the chip is still powered. The device leaves limbo for real power-off ("dormant") after a timeout. That matches T1/T2: after 15 min the M4 goes logically off but the radio stays reachable. Hypothesis: the auto-off timer (timer 0) only sends the M4 into limbo, and the limbo timeout (timer 1) is very long or disabled on 3.38.3.
 
-Test (first thing for Step 3):
+**Result 22 Oct 2026 (fw 3.38.3): timer 1 does not exist.** GET/SET timer 1 (and 2-4) return error `0781`/`0780` with code `05` (GAIA v3: invalid parameter). Timer 0 accepts any value, e.g. 60 s (`06 00 00 00 3C` -> `0700` OK).
+On removal the headset sent `0495:0880 [FF]` and `0495:089A [00 00 00 00]` (feature 4 notifications), and the GAIA link dropped 16 s later.
+
+Original test plan (kept for reference):
 1. Read timer 1: `FF 03 00 01 04 95 06 01 01`. Expect `... 07 01 01 HH LL`.
 2. If it's large or 0, set it short, e.g. 60 s: `FF 03 00 03 04 95 06 00 01 00 3C`.
 3. Repeat T2 with the auto-off timer at 15 min. If the M4 no longer reconnects, that's the fix, and no idle-watching app is needed.

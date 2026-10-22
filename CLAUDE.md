@@ -64,6 +64,7 @@ Timer, sensor and power states live in firmware; the app only writes the timer v
 - T2, 22 Oct 2026 ~15:50-17:24: firmware 3.38.3, sensor cleaned, cups facing up (as instructed, not explicitly confirmed), untouched ~1.5 h, phone Bluetooth off. Turned phone Bluetooth on: connected immediately => NOT switched off. Sensor dirt/orientation ruled out as main cause; points to firmware keeping Bluetooth radio active (standby, not off).
 - T3, 22 Oct 2026: carry case. Ryane reports the case switch-off works (headphones do not reconnect). Switch-off is immediate on placing in the case, as documented.
 - CONCLUSION so far: firmware has a working true-off path (case magnet / Hall sensor, and the button), but the auto-off timer path only goes to standby with the Bluetooth radio active. Target: trigger the true-off path when idle.
+- T4b, 22 Oct 2026 18:38-18:41 (Brussels): own test app (android/gaia-test v0.1), fw 3.38.3. Auto-off timer read 900 s. LIMBO timer (timer 1) and timers 2-4: GET and SET refused with error 05 (invalid parameter) => only timer 0 exists on 3.38.3; limbo lead dead via this command. Set timer 0 to 60 s: accepted and read back (values outside the app's 15/30/60 min list work). Took headphones off at 18:41:24: headset sent 0495:0880 [FF] and 0495:089A [00 00 00 00] at once (removal / audio stop), then the GAIA link dropped at 18:41:40 (16 s after removal, before the 60 s timer). Timer is still 60 s on the headset.
 - To record on every test: firmware version, app + app version, cup orientation, case or not, result.
 
 ## Next experiments
