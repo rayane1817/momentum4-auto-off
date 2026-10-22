@@ -63,7 +63,8 @@ Timer, sensor and power states live in firmware; the app only writes the timer v
 - 22 Oct 2026 15:50: Ryane cleaned the IR wear sensor (inside right ear cup) with a dry cloth. Tests from here on are post-cleaning.
 - T2, 22 Oct 2026 ~15:50-17:24: firmware 3.38.3, sensor cleaned, cups facing up (as instructed, not explicitly confirmed), untouched ~1.5 h, phone Bluetooth off. Turned phone Bluetooth on: connected immediately => NOT switched off. Sensor dirt/orientation ruled out as main cause; points to firmware keeping Bluetooth radio active (standby, not off).
 - T3, 22 Oct 2026: carry case. Ryane reports the case switch-off works (headphones do not reconnect). Switch-off is immediate on placing in the case, as documented.
-- T4, 22 Oct 2026 19:30-19:34 local: GAIA test tool (not yet in repo) read auto-off = 60 s (FF 03 00 01 04 95 06 01 00 -> 00 00 3C). Tool disconnected 19:30:36; reconnected via GAIA at 19:33:45 (>3 min later): headphones still on. Unknown: on/off-head, cup orientation, whether the phone still held A2DP/HFP.
+- T4, 22 Oct 2026 19:30-19:34 local: GAIA test tool (not yet in repo) read auto-off = 60 s (FF 03 00 01 04 95 06 01 00 -> 00 00 3C). Tool disconnected 19:30:36; reconnected via GAIA at 19:33:45 (>3 min later): headphones still on. Ryane: headphones not connected to any other device (multipoint ruled out). Unknown: on/off-head, whether the phone held A2DP/HFP during the 3 min.
+- Combined with T1/T2 (phone Bluetooth off, nothing else connected, still on after 15 min / 1.5 h): the 'only counts when fully disconnected' explanation is ruled out. Firmware does not power off via the timer.
 - CONCLUSION so far: firmware has a working true-off path (case magnet / Hall sensor, and the button), but the auto-off timer path only goes to standby with the Bluetooth radio active. Target: trigger the true-off path when idle.
 - To record on every test: firmware version, app + app version, cup orientation, case or not, result.
 
