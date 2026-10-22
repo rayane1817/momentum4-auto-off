@@ -3,7 +3,7 @@
 Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control channel (RFCOMM, UUID `a2129ff3-081b-4c45-8afe-469d9c4842ec`) and sends single commands. No internet permission, no libraries, Bluetooth only.
 
 ## Install (Samsung)
-1. On the phone, open this repo on GitHub, go to `android/gaia-test/release/` and download `m4-gaia-test-0.1.apk`.
+1. On the phone, open this repo on GitHub, go to `android/gaia-test/release/` and download the latest `m4-gaia-test-*.apk` (currently 0.5).
 2. Open it. Samsung asks to allow installs from that app (Chrome / My Files): allow once.
 3. Google Play Protect may warn about an unknown app: "Install anyway". It's our own debug-signed build.
 
@@ -31,9 +31,11 @@ The confirmed remote switch-off is `0495:0605` (tests T8-T10). Two ways to use i
   - **Idle is judged from the phone, not the headset:** idle = no audio actually playing (Android's "music active") AND no call in progress. This is deliberate. The headset's own on-head sensor reports on-head even when the M4 is on a desk (T-series), and Android keeps the audio route open when nothing plays, so both headset-side signals are useless here. Any audio or call resets the clock.
   - The guard does NOT hold the control channel while waiting. It only connects to the headset at the moment it powers them off, so they (and Smart Control Plus) stay usable until then.
   - Downside of the phone-side rule: if you wear them in silence (ANC, no audio) past the timeout, they will switch off. Recoverable with the button. Raise the timeout if that bothers you.
-  - Not yet confirmed on a headset end to end. Test with a short time (e.g. 2 min), play nothing, and watch "Show guard log".
+  - Confirmed on a headset end to end (test T12, v0.3). To try it quickly, set a short time (e.g. 2 min), play nothing, and watch "Show guard log".
 
-## Test plan (limbo timer)
+## Historical: limbo timer test (v0.1)
+Result: the limbo timer (timer 1) doesn't exist on firmware 3.38.3, so this lead is closed (test T4b). Kept for reference.
+
 1. Tap "Auto-off timer (0)": expect 900 s.
 2. Tap "Limbo timer (1)": note the value. This is the unknown.
 3. Tap "Timers 2-4" (just to see what else exists; errors are fine).

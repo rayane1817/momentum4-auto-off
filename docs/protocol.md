@@ -1,7 +1,7 @@
 # MOMENTUM 4 control protocol
 
 Two sources, merged 22 Oct 2026:
-- **Capture** (ground truth): `captures/btsnoop_hci_202610221800.cfa` (Samsung, SysDump), parsed with `tools/btsnoop_parse.py`. Ryane's M4, firmware 3.38.3, Smart Control Plus.
+- **Capture** (ground truth): `btsnoop_hci_202610221800.cfa` (raw capture, not published: see `captures/README.md`) (Samsung, SysDump), parsed with `tools/btsnoop_parse.py`. Ryane's M4, firmware 3.38.3, Smart Control Plus.
 - **Static analysis**: Smart Control Plus 1.6.3 (`com.sonova.chb.control`, version code 72844, arm64 XAPK via APKPure, research only, never installed), plus two community projects that talk to an M4 (sources at the end).
 Where they disagree, the capture wins.
 

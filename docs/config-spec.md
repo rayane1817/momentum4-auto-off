@@ -1,6 +1,6 @@
 # M4 config command spec (for android/gaia-test)
 
-For MOMENTUM 4, fw 3.38.3. Verified against the HCI capture (`captures/btsnoop_hci_202610221800.cfa`), the old-app command map (`m4.json` 4.0.0 + 4.9.3), and `docs/protocol.md`. Every value below marked "capture" was seen on the wire from Ryane's headset.
+For MOMENTUM 4, fw 3.38.3. Verified against the HCI capture (`btsnoop_hci_202610221800.cfa` (raw capture, not published: see `captures/README.md`)), the old-app command map (`m4.json` 4.0.0 + 4.9.3), and `docs/protocol.md`. Every value below marked "capture" was seen on the wire from Ryane's headset.
 
 Frame: `FF 03 00 <len> 04 95 <cmdHi> <cmdLo> <payload>`. len = payload byte count. All vendor 0x0495. Responses come back as `04 95 <cmdLo|0x01xx>`; notifications as `|0x80`. All commands here are reversible and safe; none belong in the blocked list.
 
