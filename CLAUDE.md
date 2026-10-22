@@ -54,7 +54,9 @@ Timer, sensor and power states live in firmware; the app only writes the timer v
 
 ## Ryane's device (from app, 22 Oct 2026)
 - Model M4AEBT SE, hardware version 4, firmware 3.38.3, connection type Bluetooth Classic.
-- App: French UI, very likely Smart Control Plus; app version not yet recorded.
+- App: Smart Control Plus confirmed (package com.sonova.chb.control seen in phone logs); app version not yet recorded.
+- Phone: Samsung (One UI). Samsung's memory manager (MARS) freezes the app in the background (FRZ/UFZ entries) and Device Care toggles its suspended state. Possibly related to app settings not sticking.
+- HCI snoop log enabled 22 Oct 2026 17:37 (full, no filters). First log dump (Samsung /log folder) had an empty log/bluetooth folder: btsnoop not included. Needs adb bugreport from a PC, or *#9900# in Samsung's own Phone app.
 
 ## Test log
 - T1, 22 Oct 2026: firmware 3.38.3, auto-off 15 min in app, phone Bluetooth off, headphones untouched for 15 min. Turned phone Bluetooth on: headphones connected immediately => NOT switched off. Cup orientation not recorded.
