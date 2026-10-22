@@ -58,6 +58,7 @@ Timer, sensor and power states live in firmware; the app only writes the timer v
 
 ## Test log
 - T1, 22 Oct 2026: firmware 3.38.3, auto-off 15 min in app, phone Bluetooth off, headphones untouched for 15 min. Turned phone Bluetooth on: headphones connected immediately => NOT switched off. Cup orientation not recorded.
+- 22 Oct 2026 15:50: Ryane cleaned the IR wear sensor (inside right ear cup) with a dry cloth. Tests from here on are post-cleaning.
 - To record on every test: firmware version, app + app version, cup orientation, case or not, result.
 
 ## Next experiments
