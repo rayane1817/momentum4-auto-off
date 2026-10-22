@@ -60,13 +60,15 @@ Timer, sensor and power states live in firmware; the app only writes the timer v
 - T1, 22 Oct 2026: firmware 3.38.3, auto-off 15 min in app, phone Bluetooth off, headphones untouched for 15 min. Turned phone Bluetooth on: headphones connected immediately => NOT switched off. Cup orientation not recorded.
 - 22 Oct 2026 15:50: Ryane cleaned the IR wear sensor (inside right ear cup) with a dry cloth. Tests from here on are post-cleaning.
 - T2, 22 Oct 2026 ~15:50-17:24: firmware 3.38.3, sensor cleaned, cups facing up (as instructed, not explicitly confirmed), untouched ~1.5 h, phone Bluetooth off. Turned phone Bluetooth on: connected immediately => NOT switched off. Sensor dirt/orientation ruled out as main cause; points to firmware keeping Bluetooth radio active (standby, not off).
+- T3, 22 Oct 2026: carry case. Ryane reports the case switch-off works (headphones do not reconnect). Procedure details (duration, BT off) not confirmed.
+- CONCLUSION so far: firmware has a working true-off path (case magnet / Hall sensor, and the button), but the auto-off timer path only goes to standby with the Bluetooth radio active. Target: trigger the true-off path when idle.
 - To record on every test: firmware version, app + app version, cup orientation, case or not, result.
 
 ## Next experiments
-- T3: carry case (cups facing back of case), 15 min, then phone Bluetooth on.
 - T4: on-head detection OFF in app, cups up, 15 min.
 - Does the auto-off setting persist after an app restart (Smart Control vs Plus)?
 
 ## Possible build directions (decide after tests)
+- Hardware workaround: a magnet on a desk stand/hook at the spot where the case magnet sits, to trigger the case switch-off (r/sennheiser 154aet4 user tried this). Needs locating the Hall sensor.
 - Android automation: switch media output away from the M4 / send a hard power-off when idle.
 - Reverse-engineer the Bluetooth protocol (Android HCI snoop log while toggling settings in Smart Control Plus) to find the power-off / timer commands.
