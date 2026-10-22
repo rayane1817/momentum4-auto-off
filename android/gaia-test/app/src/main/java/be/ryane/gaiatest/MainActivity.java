@@ -11,10 +11,12 @@ import android.content.ClipboardManager;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.app.AlertDialog;
 import android.text.InputType;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -38,7 +40,8 @@ public class MainActivity extends Activity {
     private Spinner deviceSpinner;
     private TextView log;
     private ScrollView logScroll;
-    private EditText secondsField, hexField;
+    private EditText secondsField, hexField, idleMinutesField;
+    private CheckBox requireOffHead;
     private volatile BluetoothSocket socket;
     private volatile OutputStream out;
     // One sender thread keeps frames in the order they were tapped.
@@ -74,6 +77,23 @@ public class MainActivity extends Activity {
         root.addView(row(
                 button("Set limbo (1)", v -> setTimer(1)),
                 button("Set auto-off (0)", v -> setTimer(0))));
+
+        root.addView(label("Power off (0605, confirmed)"));
+        root.addView(button("POWER OFF NOW", v -> powerOffNow()));
+
+        root.addView(label("Auto power-off when idle"));
+        idleMinutesField = new EditText(this);
+        idleMinutesField.setInputType(InputType.TYPE_CLASS_NUMBER);
+        idleMinutesField.setHint("idle minutes, e.g. 15");
+        idleMinutesField.setText("15");
+        root.addView(idleMinutesField);
+        requireOffHead = new CheckBox(this);
+        requireOffHead.setText("Require off-head (safer; needs working sensor)");
+        requireOffHead.setChecked(true);
+        root.addView(requireOffHead);
+        root.addView(row(
+                button("Start idle guard", v -> startIdle()),
+                button("Stop idle guard", v -> stopIdle())));
 
         root.addView(label("Raw frame (hex)"));
         hexField = new EditText(this);
@@ -221,6 +241,58 @@ public class MainActivity extends Activity {
     private void disconnect() {
         closeQuietly();
         append("Disconnected by user.");
+    }
+
+    private BluetoothDevice selectedDevice() {
+        int i = deviceSpinner.getSelectedItemPosition();
+        return (i >= 0 && i < devices.size()) ? devices.get(i) : null;
+    }
+
+    private void powerOffNow() {
+        if (out == null) {
+            toast("Connect first");
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Power off the headphones?")
+                .setMessage("Sends 0605. They switch off fully and can only be turned back on with the button.")
+                .setPositiveButton("Power off", (d, w) -> send(Gaia.powerOff()))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void startIdle() {
+        BluetoothDevice device = selectedDevice();
+        if (device == null) {
+            toast("Pick the headphones first");
+            return;
+        }
+        int minutes;
+        try {
+            minutes = Integer.parseInt(idleMinutesField.getText().toString().trim());
+        } catch (NumberFormatException e) {
+            toast("Enter idle minutes");
+            return;
+        }
+        if (minutes < 1) {
+            toast("At least 1 minute");
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 2);
+        }
+        // The service needs the GAIA channel, so free it here first.
+        closeQuietly();
+        AutoOffService.start(this, device.getAddress(), minutes * 60_000L, requireOffHead.isChecked());
+        append("Idle guard started: off after " + minutes + " min unused"
+                + (requireOffHead.isChecked() ? " (off-head required)." : " (audio-only, riskier).")
+                + " Watch the notification. This app's own connection is now closed so the guard can hold the channel.");
+    }
+
+    private void stopIdle() {
+        AutoOffService.stop(this);
+        append("Idle guard stopped.");
     }
 
     private void closeQuietly() {

@@ -13,6 +13,15 @@ Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control cha
 3. Open "M4 GAIA test", allow "Nearby devices", pick the MOMENTUM 4, tap Connect.
 4. Tap the buttons, then "Copy log" and paste the log in the chat.
 
+## Power off and auto power-off (v0.2)
+The confirmed remote switch-off is `0495:0605` (tests T8-T10). Two ways to use it:
+
+- **POWER OFF NOW** button: connect, tap it, confirm. The headphones switch off fully (same as the case or a 3 s button hold). They can only be turned back on with the button, never remotely.
+- **Auto power-off when idle**: a background guard that sends `0605` after the headphones are unused for the set minutes. Set the minutes, keep "Require off-head" ticked (safer), tap "Start idle guard". It runs as a notification you can see; the app's own connection closes so the guard can hold the control channel.
+  - Idle = not worn AND no audio, for the whole window. Any sign of use resets the timer. It never fires on an unknown state.
+  - "Require off-head" needs the headset to answer the on-head query. If it doesn't on this firmware, the guard says so and will not fire; untick the box only if you accept it firing on audio-silence alone (riskier: pausing music while worn could switch them off).
+  - This is the one part not yet tested on a headset. Try it with a short time (e.g. 2 min) first and watch the notification.
+
 ## Test plan (limbo timer)
 1. Tap "Auto-off timer (0)": expect 900 s.
 2. Tap "Limbo timer (1)": note the value. This is the unknown.

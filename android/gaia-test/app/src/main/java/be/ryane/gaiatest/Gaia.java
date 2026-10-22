@@ -15,6 +15,16 @@ final class Gaia {
     static final int SENNHEISER = 0x0495;
     static final int QUALCOMM = 0x001D;
 
+    // Confirmed on fw 3.38.3 (tests T8-T10): remote true power-off, empty payload.
+    static final int CMD_POWER_OFF = 0x0605;
+    static final int CMD_PHYSICAL_STATE_GET = 0x0402;   // resp 0x0502, [headset/left, right]: 1 in case, 2 off head, 3 on head
+    static final int CMD_BATTERY_GET = 0x0603;
+    static final int CMD_AUDIO_STREAM_NOTIF = 0x0880;   // payload[0]: FF = no stream, else active (e.g. 02)
+
+    static byte[] powerOff() {
+        return build(SENNHEISER, CMD_POWER_OFF);
+    }
+
     static final class Frame {
         final int version, vendor, command;
         final byte[] payload;
@@ -24,6 +34,14 @@ final class Gaia {
             this.vendor = vendor;
             this.command = command;
             this.payload = payload;
+        }
+
+        int type() {
+            return (command >> 7) & 3;        // 0 cmd, 1 notif, 2 resp, 3 error
+        }
+
+        int base() {
+            return command & ~(3 << 7);       // command id with the type bits cleared
         }
     }
 
