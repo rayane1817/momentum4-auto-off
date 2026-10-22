@@ -2,7 +2,7 @@
 
 A command-line tool to talk to the MOMENTUM 4 over its GAIA control channel (Bluetooth Classic, RFCOMM), from Windows or Linux. Pure Python 3.9+, no packages to install. See `../docs/protocol.md` for the protocol and the power-off candidate list.
 
-This tool was written and unit-tested against the real capture frames, but it has **not** been run against a headset (the dev environment has no Bluetooth). Expect to shake out Windows-specific quirks on first use; the log tells you what happened.
+Tested against a real headset on Windows 10 with Python 3.12 (22 Oct 2026): `verify`, `battery` and the `--features 3` sweep work. The sweep found the remote power-off command `0495:0605` (see `../docs/search-log.md`).
 
 ## Before you run
 1. The headset must not be in use by any other GAIA app. On the phone that normally holds it, force stop Smart Control Plus, or just keep the headphones away from the phone.
@@ -53,5 +53,6 @@ Worst realistic outcome of a sweep: a "ship/transport mode" that needs a USB cha
 It looks up the GAIA channel by SDP if pybluez is installed, otherwise it uses channel 15 (from the capture), and as a last resort sweeps channels 1-30. Every attempt and every frame, in and out, is timestamped in the log under `logs/`.
 
 ## Windows notes
-- Python's Bluetooth support uses the Microsoft Bluetooth stack. If connect fails with "an address incompatible with the requested protocol", the headset may be using a different RFCOMM channel: try `--channel 15`, or install pybluez for SDP lookup (`pip install pybluez2`).
+- Stock Windows Python has no `socket.AF_BLUETOOTH`, so on Windows the client opens RFCOMM through the Microsoft Bluetooth stack (WinSock `AF_BTH`) with ctypes. It connects by the GAIA service UUID and lets Windows find the channel by SDP; `--channel` is only a fallback. No packages needed (`pybluez2` does not install on Python 3.12 anyway).
+- Use `--channel 15` for sweeps, so a reconnect check never falls back to trying channels 1-30.
 - If Windows keeps auto-reconnecting the audio profile and the control channel won't open, unpair the headset from any other nearby device first.

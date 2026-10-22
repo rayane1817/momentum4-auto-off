@@ -1,0 +1,25 @@
+23:22:49.466 # log file: logs\gaia_20261022_232249.log
+23:22:49.466 # connecting to 80:C3:BA:4D:6A:24
+23:22:49.611 # connected on RFCOMM channel 15
+23:22:49.611 # sweep scope 3, request-cmd range 0x04..0x7F
+23:22:49.611 -> FF 03 00 00 04 95 06 04
+23:22:49.632 <- 0495:0704 resp [0E E7 FF FF]
+23:22:51.616 -> FF 03 00 00 04 95 06 05
+23:22:51.643 <- 0495:0705 resp []
+23:22:51.812 <- 0495:0880 notif [FF]
+23:22:51.813 <- 0495:089A notif [00 00 00 00]
+23:22:51.815 <- 0495:0880 notif [FF]
+23:22:51.816 <- 0495:089A notif [00 00 00 00]
+23:22:51.860 # link closed by headset
+23:22:51.861 # link dropped; probing reconnect for 60s to tell power-off from a reset
+23:22:56.891 # connect ch 15 failed: GAIA-UUID connect: timed out after 5.0s; ch 15 connect: timed out after 5.0s
+23:23:06.970 # connect ch 15 failed: GAIA-UUID connect: timed out after 5.0s; ch 15 connect: timed out after 5.0s
+23:23:15.155 # connect ch 15 failed: GAIA-UUID connect: timed out after 5.0s; ch 15 connect: timed out after 5.0s
+23:23:23.342 # connect ch 15 failed: GAIA-UUID connect: timed out after 5.0s; ch 15 connect: timed out after 5.0s
+23:23:31.528 # connect ch 15 failed: GAIA-UUID connect: timed out after 5.0s; ch 15 connect: timed out after 5.0s
+23:23:39.713 # connect ch 15 failed: GAIA-UUID connect: timed out after 5.0s; ch 15 connect: timed out after 5.0s
+23:23:47.901 # connect ch 15 failed: GAIA-UUID connect: timed out after 5.0s; ch 15 connect: timed out after 5.0s
+23:23:56.088 # connect ch 15 failed: GAIA-UUID connect: timed out after 5.0s; ch 15 connect: timed out after 5.0s
+23:23:59.088 # no reconnect in 60s: headset appears OFF
+23:23:59.088 # *** SUCCESS: link down after 0495:0605 ***
+23:23:59.088 # done

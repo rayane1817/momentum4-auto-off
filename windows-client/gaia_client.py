@@ -2,9 +2,10 @@
 """
 MOMENTUM 4 GAIA v3 client over Bluetooth Classic RFCOMM.
 
-Runs on Windows 10/11 and Linux with stock Python 3.9+ (stdlib socket,
-AF_BLUETOOTH). No pip packages required; pybluez is used only for SDP
-channel lookup if it happens to be installed.
+Runs on Windows 10/11 and Linux with stock Python 3.9+, no pip packages.
+Linux uses stdlib AF_BLUETOOTH. Windows has no AF_BLUETOOTH, so it uses
+WinSock AF_BTH via ctypes and connects by the GAIA service UUID. pybluez
+is used only for SDP channel lookup if it happens to be installed.
 
 See docs/protocol.md for the protocol and the candidate list.
 The headset must NOT be connected to any other GAIA app while this runs
@@ -133,6 +134,125 @@ def blocked_reason(frame):
         return "Qualcomm firmware upgrade (feature 6)"
     return None
 
+# --------------------------------------------------------- RFCOMM transport
+# Stock CPython exposes socket.AF_BLUETOOTH only on Linux (BlueZ). On Windows
+# there is no AF_BLUETOOTH; RFCOMM must go through the native WinSock Bluetooth
+# stack (AF_BTH / BTHPROTO_RFCOMM) via ctypes. The protocol and framing above
+# are untouched; this only replaces how the byte stream is opened.
+
+HAVE_NATIVE_BT = hasattr(socket, "AF_BLUETOOTH")
+IS_WINDOWS = sys.platform.startswith("win")
+
+if IS_WINDOWS:
+    import ctypes
+    import select as _select
+
+    _AF_BTH = 32
+    _BTHPROTO_RFCOMM = 0x0003
+    _WSAEWOULDBLOCK = 10035
+    _SOCKET = ctypes.c_uint64 if ctypes.sizeof(ctypes.c_void_p) == 8 else ctypes.c_uint32
+
+    class _GUID(ctypes.Structure):
+        _fields_ = [("Data1", ctypes.c_ulong),
+                    ("Data2", ctypes.c_ushort),
+                    ("Data3", ctypes.c_ushort),
+                    ("Data4", ctypes.c_ubyte * 8)]
+
+    class _SOCKADDR_BTH(ctypes.Structure):
+        # ws2bth.h declares this under pshpack1: sizeof == 30, btAddr at
+        # offset 2. Natural alignment (40 bytes) makes WinSock read padding
+        # as the address and fail with WSA 10049.
+        _pack_ = 1
+        _fields_ = [("addressFamily", ctypes.c_ushort),
+                    ("btAddr", ctypes.c_ulonglong),
+                    ("serviceClassId", _GUID),
+                    ("port", ctypes.c_ulong)]
+
+    _ws2 = ctypes.windll.ws2_32
+    _ws2.connect.argtypes = [_SOCKET, ctypes.c_void_p, ctypes.c_int]
+    _ws2.connect.restype = ctypes.c_int
+    _ws2.WSAGetLastError.restype = ctypes.c_int
+
+    def _bt_addr_to_int(addr):
+        """'80:C3:BA:4D:6A:24' -> 0x80C3BA4D6A24 (MAC octets, big-endian)."""
+        parts = addr.split(":")
+        if len(parts) != 6:
+            raise ValueError("bad BT address: %r" % addr)
+        val = 0
+        for p in parts:
+            val = (val << 8) | int(p, 16)
+        return val
+
+    # GAIA RFCOMM service UUID (docs/protocol.md). The MS stack resolves the
+    # channel from this via SDP, which is both more robust than a raw channel
+    # number (raw connect gives WSA 10049) and matches "find the channel
+    # through SDP, don't hard-code it".
+    _GAIA_UUID = "a2129ff3-081b-4c45-8afe-469d9c4842ec"
+
+    def _make_guid(u):
+        u = u.replace("-", "")
+        g = _GUID()
+        g.Data1 = int(u[0:8], 16)
+        g.Data2 = int(u[8:12], 16)
+        g.Data3 = int(u[12:16], 16)
+        g.Data4 = (ctypes.c_ubyte * 8)(*bytes.fromhex(u[16:32]))
+        return g
+
+    def _try_connect(addr_int, guid, port, timeout):
+        s = socket.socket(_AF_BTH, socket.SOCK_STREAM, _BTHPROTO_RFCOMM)
+        sa = _SOCKADDR_BTH()
+        sa.addressFamily = _AF_BTH
+        sa.btAddr = addr_int
+        if guid is not None:
+            sa.serviceClassId = guid
+        sa.port = port
+        s.setblocking(False)
+        rc = _ws2.connect(s.fileno(), ctypes.byref(sa), ctypes.sizeof(sa))
+        if rc != 0:
+            err = _ws2.WSAGetLastError()
+            if err != _WSAEWOULDBLOCK:
+                s.close()
+                raise OSError("WSA %d" % err)
+            _, w, _x = _select.select([], [s], [s], timeout)
+            if not w:
+                s.close()
+                raise OSError("timed out after %.1fs" % timeout)
+            soerr = s.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+            if soerr != 0:
+                s.close()
+                raise OSError("SO_ERROR %d" % soerr)
+        s.setblocking(True)
+        return s
+
+    def open_rfcomm(addr, channel, timeout):
+        """Open a connected RFCOMM stream socket on Windows. Returns a normal
+        Python socket object (send/recv/settimeout/close work regardless of
+        address family). Connects by the GAIA service UUID first (OS resolves
+        the channel via SDP), then falls back to the explicit channel number."""
+        addr_int = _bt_addr_to_int(addr)
+        errors = []
+        try:
+            return _try_connect(addr_int, _make_guid(_GAIA_UUID), 0, timeout)
+        except OSError as e:
+            errors.append("GAIA-UUID connect: %s" % e)
+        if channel:
+            try:
+                return _try_connect(addr_int, None, channel, timeout)
+            except OSError as e:
+                errors.append("ch %d connect: %s" % (channel, e))
+        raise OSError("; ".join(errors))
+
+elif HAVE_NATIVE_BT:
+    def open_rfcomm(addr, channel, timeout):
+        s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
+        s.settimeout(timeout)
+        s.connect((addr, channel))
+        return s
+
+else:
+    def open_rfcomm(addr, channel, timeout):
+        raise OSError("no RFCOMM transport on this platform (no AF_BLUETOOTH, not Windows)")
+
 # ------------------------------------------------------------- connection
 
 class Link:
@@ -160,9 +280,7 @@ class Link:
     def connect(self, timeout=10.0):
         for ch in self._candidate_channels():
             try:
-                s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
-                s.settimeout(timeout)
-                s.connect((self.addr, ch))
+                s = open_rfcomm(self.addr, ch, timeout)
                 s.settimeout(1.0)
                 self.sock, self.channel, self.rxbuf = s, ch, bytearray()
                 self.log.note("connected on RFCOMM channel %d" % ch)

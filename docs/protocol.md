@@ -148,7 +148,10 @@ Features **16 (`20xx`) and 19 (`26xx`)** were seen in the capture but are not in
 - Device rename (ID unknown for M4; the tool blocks it if identified).
 
 ## Is there a remote power-off command?
-Not in the capture, and not as a dedicated feature in the app. The app's feature registry has 59 entries (AutoPowerOff, Battery, Reboot, FactoryReset, TouchControls, OnHeadDetection, PlaySound, ...) and **no PowerOff feature**. No power-off button in the UI strings either.
+**Yes: `0495:0605`, empty payload** (`FF 03 00 00 04 95 06 05`). Found by the feature 3 sweep (T8, 22 Oct 2026) and reproduced (T9). The headset answers `0495:0705 resp []`, closes the link about 0.25 s later and switches fully off (no reconnect, same state as button or case). Details: docs/search-log.md.
+Also from that sweep: `0495:0604` -> `[0E E7 FF FF]`; 0x0EE7 = 3815, probably battery voltage in mV.
+
+Before the sweep: not in the capture, and not as a dedicated feature in the app. The app's feature registry has 59 entries (AutoPowerOff, Battery, Reboot, FactoryReset, TouchControls, OnHeadDetection, PlaySound, ...) and **no PowerOff feature**. No power-off button in the UI strings either.
 
 ### Power-off leads, best first
 0. **Limbo timeout (timer 1).** See "Timers: the key finding" above. Cheapest test, and it fixes the problem in firmware if it works.
