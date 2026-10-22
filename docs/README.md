@@ -7,6 +7,9 @@ Results:
 - [`community-protocol-notes.md`](community-protocol-notes.md): what other open-source projects know about adaptive ANC, anti-wind, EQ and paired devices, with tests to confirm on the M4.
 - [`auto-off-research.md`](auto-off-research.md): background research: manual vs FAQ, firmware timeline, community reports.
 
+Planning:
+- [`todo-cloud.md`](todo-cloud.md): open features vs Smart Control Plus (codecs, hi-res, EQ, noise sub-modes, ...) and the capture plan to fill them in.
+
 Process notes, kept for transparency:
 - [`plan.md`](plan.md), [`re-plan.md`](re-plan.md): how the investigation was planned.
 - [`ux-spec.md`](ux-spec.md): design spec for the Android app UI.

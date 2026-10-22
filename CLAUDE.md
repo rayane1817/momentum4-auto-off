@@ -83,6 +83,7 @@ Timer, sensor and power states live in firmware; the app only writes the timer v
 - To record on every test: firmware version, app + app version, cup orientation, case or not, result.
 
 ## Next experiments
+- Feature parity with Smart Control Plus (codecs, audio mode priority, hi-res, EQ, adaptive/anti-wind, ...): see docs/todo-cloud.md. Main method is one HCI capture session, not more decompiling.
 - Does 0495:0605 work on other firmware versions and on other Sennheiser GAIA v3 models? (community reports)
 
 ## Chosen route (22 Oct 2026)
