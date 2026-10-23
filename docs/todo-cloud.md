@@ -44,6 +44,9 @@ From the main screen and community notes (see `community-protocol-notes.md`):
 - **Android home-screen widget**: change ANC mode and EQ preset without opening the app (u/TheUnAmericanGenral, offered to donate). ANC/transparency/off commands are already in the app, so a widget for those is ready to build. EQ presets need the capture session below first.
 - **Windows**: same user is on Windows with a BTD600 dongle. The dongle holds the headset link, so a PC tool needs the M4 paired to the PC's own Bluetooth as well (multipoint). Lower priority.
 
+## Bug reports
+- **Galaxy Tab S10+: "doesn't detect the headphones"** (u/Ncis16; works on his Galaxy S26 Ultra). Code check: `loadDevices()` only lists *paired* devices, once, at app start; nothing refreshes it if Bluetooth was off, the permission came later, or the M4 was paired after opening. Likely causes, to confirm with the user: M4 not paired to the tablet; multipoint already busy with two other devices so the RFCOMM connect fails; Nearby devices permission denied; Smart Control Plus holding the channel. Fixes: a Refresh button, re-list on Bluetooth state change, a clear message when no MOMENTUM is paired, and a hint about multipoint when connect fails.
+
 ## Capture session plan for Ryane (one session, ~15 min)
 HCI snoop on, Bluetooth off/on, then in Smart Control Plus, noting the time of each step:
 1. Audio mode priority: Advanced -> Reliable -> Advanced (headset restarts each time).
