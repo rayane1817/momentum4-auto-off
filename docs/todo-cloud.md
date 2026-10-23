@@ -40,6 +40,10 @@ From the main screen and community notes (see `community-protocol-notes.md`):
 | Touch controls on/off, touch lock | `1606` / `1607` (old app) | test GET, then capture |
 | Reboot (needed after codec/hi-res changes) | bytes unknown | capture the codec or hi-res change; the reboot should appear right after |
 
+## Requested by users (r/sennheiser, 23 Oct 2026)
+- **Android home-screen widget**: change ANC mode and EQ preset without opening the app (u/TheUnAmericanGenral, offered to donate). ANC/transparency/off commands are already in the app, so a widget for those is ready to build. EQ presets need the capture session below first.
+- **Windows**: same user is on Windows with a BTD600 dongle. The dongle holds the headset link, so a PC tool needs the M4 paired to the PC's own Bluetooth as well (multipoint). Lower priority.
+
 ## Capture session plan for Ryane (one session, ~15 min)
 HCI snoop on, Bluetooth off/on, then in Smart Control Plus, noting the time of each step:
 1. Audio mode priority: Advanced -> Reliable -> Advanced (headset restarts each time).

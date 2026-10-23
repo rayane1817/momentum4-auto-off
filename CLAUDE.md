@@ -39,6 +39,7 @@ Goal: fix or work around the broken auto power-off of the MOMENTUM 4, possibly w
 - "Auto-off worked half a year ago, then an update broke it" (~2025) and "worked until ~3 months ago" (~mid 2026) (17meao8).
 - "Solution found" (18rtq0h, Dec 2023): firmware update not offered in North America; VPN to Germany made it appear. Not an auto-off fix.
 - Replies to Ryane's r/sennheiser post (22 Oct 2026): (a) "if the source device is a phone, put it on vibrate; any notification resets the timer"; (b) an owner on old fw 2.x for 4 months, now 3.38.3: same behaviour on both, after 15 min off-head it goes to a rest mode regardless of position, touching it wakes it and it reconnects. => standby-not-off is not new in 3.38.3.
+- Replies to the app post (23 Oct 2026): u/razorree: same problems, reconnects to all devices all the time, does NOT turn off in the case (magnet in the right place), moving them a bit (e.g. in a drawer) wakes them. u/TheUnAmericanGenral (M4 + BTD600, Android + Windows) wants a widget for ANC mode / EQ preset, offers to donate.
 - Sennheiser official Reddit account: hold the button, don't tap. Sennheiser rep @ericpalonen is active in the Head-Fi firmware thread.
 
 ## Android-specific findings
