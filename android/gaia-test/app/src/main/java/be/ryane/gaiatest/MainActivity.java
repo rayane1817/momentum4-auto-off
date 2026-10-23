@@ -558,8 +558,12 @@ public class MainActivity extends Activity {
         switch (base) {
             case 0x0603: if (b0 >= 0) vBattery.setText(b0 + " %"); break;
             case 0x1206: vModel.setText(ascii(f.payload)); break;
-            case 0x1201: vFirmware.setText(ascii(f.payload)); break;
-            case 0x1200: if (b0 >= 0) vHardware.setText(String.valueOf(b0)); break;
+            case 0x1201: if (f.payload.length >= 6)                          // firmware = 3 x u16 BE
+                    vFirmware.setText(Gaia.u16(f.payload, 0) + "." + Gaia.u16(f.payload, 2) + "." + Gaia.u16(f.payload, 4));
+                break;
+            case 0x1200: if (f.payload.length >= 2) vHardware.setText(String.valueOf(Gaia.u16(f.payload, 0)));
+                else if (b0 >= 0) vHardware.setText(String.valueOf(b0));
+                break;
             case 0x1A05: ancOn = b0 == 1; refreshNoise(); break;
             case 0x1805: transpOn = b0 == 1; refreshNoise(); break;
             case 0x1A03: if (b0 >= 0) { transpSeek.setProgress(b0); transpValue.setText(String.valueOf(b0)); } break;

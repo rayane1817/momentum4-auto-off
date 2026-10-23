@@ -16,6 +16,10 @@ Unofficial community project. Not affiliated with or endorsed by Sennheiser or S
 | Tested on | One MOMENTUM 4 (M4AEBT SE), firmware 3.38.3, Samsung phone |
 | Other firmware versions or models | Unknown, reports welcome |
 
+## Download the app
+
+Get the latest APK from the **[Releases page](../../releases/latest)**, then open it on your Android phone to install (allow installs from your browser, and "install anyway" if Play Protect warns, it is a debug-signed community build). See [`android/gaia-test/README.md`](android/gaia-test/README.md) for how to use it.
+
 ## What's going on
 
 - The original manual (version 08/22) says the headphones "automatically switch off after 15 minutes" once you take them off. A later online FAQ says they "switch off almost completely" and wake when touched. The behaviour changed somewhere along the way.
