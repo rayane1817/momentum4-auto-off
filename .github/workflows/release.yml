@@ -1,0 +1,63 @@
+name: Release APK
+
+# Builds the Android app and publishes the APK to the Releases tab.
+# Trigger by pushing a version tag, e.g.  git tag v0.6 && git push origin v0.6
+# or run manually from the Actions tab (that build uploads the APK as a
+# workflow artifact but does not create a Release).
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android/gaia-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Build release APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Name the APK after the version
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/dist"
+          ver=$(grep -oP "versionName '\K[^']+" app/build.gradle)
+          cp app/build/outputs/apk/release/app-release.apk \
+             "${GITHUB_WORKSPACE}/dist/m4-gaia-test-${ver}.apk"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: m4-gaia-test-apk
+          path: dist/*.apk
+
+      - name: Publish to Releases (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.apk
+          generate_release_notes: true
+          body: |
+            MOMENTUM 4 GAIA test app. Sideload on Android (allow installs from your browser, "install anyway" if Play Protect warns; it is debug-signed).
+
+            Debug-signed, unofficial community build. See the README for what it does and the safety notes.
