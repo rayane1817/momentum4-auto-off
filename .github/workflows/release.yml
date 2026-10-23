@@ -1,9 +1,12 @@
 name: Release APK
 
 # Builds the Android app and publishes the APK to the Releases tab.
-# Trigger by pushing a version tag, e.g.  git tag v0.6 && git push origin v0.6
-# or run manually from the Actions tab (that build uploads the APK as a
-# workflow artifact but does not create a Release).
+# Two ways to cut a release, both create a Release tagged v<versionName>:
+#   - push a version tag:  git tag v0.6 && git push origin v0.6
+#   - or, once this file is on the default branch, Actions tab >
+#     "Release APK" > Run workflow.
+# The tag is derived from versionName in android/gaia-test/app/build.gradle,
+# so bump that before cutting a release.
 
 on:
   push:
@@ -39,9 +42,11 @@ jobs:
           ./gradlew assembleRelease --no-daemon
 
       - name: Name the APK after the version
+        id: ver
         run: |
           mkdir -p "${GITHUB_WORKSPACE}/dist"
           ver=$(grep -oP "versionName '\K[^']+" app/build.gradle)
+          echo "ver=$ver" >> "$GITHUB_OUTPUT"
           cp app/build/outputs/apk/release/app-release.apk \
              "${GITHUB_WORKSPACE}/dist/m4-gaia-test-${ver}.apk"
 
@@ -51,13 +56,13 @@ jobs:
           name: m4-gaia-test-apk
           path: dist/*.apk
 
-      - name: Publish to Releases (tags only)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Publish to Releases
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.ver.outputs.ver }}
           files: dist/*.apk
           generate_release_notes: true
           body: |
-            MOMENTUM 4 GAIA test app. Sideload on Android (allow installs from your browser, "install anyway" if Play Protect warns; it is debug-signed).
+            MOMENTUM 4 GAIA test app, v${{ steps.ver.outputs.ver }}. Sideload on Android (allow installs from your browser, "install anyway" if Play Protect warns; it is debug-signed).
 
-            Debug-signed, unofficial community build. See the README for what it does and the safety notes.
+            Unofficial community build. See the README for what it does and the safety notes.
