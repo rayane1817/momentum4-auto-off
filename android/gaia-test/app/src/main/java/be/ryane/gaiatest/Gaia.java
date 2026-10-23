@@ -112,7 +112,7 @@ final class Gaia {
         } else if (f.vendor == SENNHEISER && base == 0x0603 && type != 3 && f.payload.length >= 1) {
             s.append("  => battery ").append(f.payload[f.payload.length - 1] & 0xFF).append(" %");
         } else if (f.vendor == SENNHEISER && type != 3) {
-            String d = decodeConfig(base, f.payload);
+            String d = decodeConfig(base, type, f.payload);
             if (d != null) s.append("  => ").append(d);
         }
         if (type == 3) {
@@ -128,7 +128,7 @@ final class Gaia {
     }
 
     /** Human-readable decode of config GET responses / notifications. base = command with type bits cleared. */
-    private static String decodeConfig(int base, byte[] p) {
+    private static String decodeConfig(int base, int type, byte[] p) {
         int b0 = p.length >= 1 ? p[0] & 0xFF : -1;
         switch (base) {
             case 0x1A05: return "ANC " + onOff(b0);                                  // ANC on/off
@@ -146,10 +146,11 @@ final class Gaia {
             case 0x0815: return "comfort call " + onOff(b0);
             case 0x0818: return "low latency " + onOff(b0);
             case 0x0802: return "voice/tone prompts mode = " + b0;
-            case 0x0800: return "codec = " + b0;
-            case 0x1200: return "hw revision = " + b0;
-            case 0x1201: return "release version = " + ascii(p);
-            case 0x1202:                                                            // firmware: 3 x u16 BE
+            case 0x0800:                                                            // 0800 codec (resp) shares a base with 0880 audio-stream notif
+                return type == 1 ? "audio stream " + (b0 == 0xFF ? "stopped" : "active") : "codec = " + b0;
+            case 0x1200: return "hw revision = " + (p.length >= 2 ? u16(p, 0) : b0);   // value in the u16, e.g. 00 04 = 4
+            case 0x1201:                                                            // firmware: 3 x u16 BE, e.g. 0003 0026 0003 = 3.38.3
+            case 0x1202:
                 if (p.length >= 6) return "firmware = " + u16(p, 0) + "." + u16(p, 2) + "." + u16(p, 4);
                 return "firmware = " + hex(p);
             case 0x1206: return "model = " + ascii(p);
