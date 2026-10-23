@@ -7,9 +7,12 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothSocket;
+import android.content.BroadcastReceiver;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
@@ -72,6 +75,15 @@ public class MainActivity extends Activity {
     private boolean ancOn, transpOn, applying;
     private SharedPreferences prefs;
 
+    // Re-scan the paired-device list when Bluetooth turns on or a device is paired,
+    // so the picker is never stuck empty (the Galaxy Tab "doesn't detect" case).
+    private final BroadcastReceiver btReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context ctx, Intent intent) {
+            if (hasBtPermission()) loadDevices();
+        }
+    };
+
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -99,19 +111,49 @@ public class MainActivity extends Activity {
         setContentView(root);
 
         setConnected(false);
-        if (Build.VERSION.SDK_INT >= 31
-                && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+        swAutoStart.setChecked(prefs.getBoolean("autostart", false));
+        if (!hasBtPermission()) {
             requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, 1);
         } else {
             loadDevices();
         }
-        swAutoStart.setChecked(prefs.getBoolean("autostart", false));
+        // Auto-start the idle guard once at launch, if the user asked for it.
+        if (prefs.getBoolean("autostart", false) && selectedDevice() != null) startGuard();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        IntentFilter f = new IntentFilter();
+        f.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
+        f.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
+        registerReceiver(btReceiver, f);
+    }
+
+    @Override
+    protected void onStop() {
+        try { unregisterReceiver(btReceiver); } catch (IllegalArgumentException ignored) {}
+        super.onStop();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        if (hasBtPermission()) loadDevices();   // pick up anything paired while we were away
         refreshGuardButton();
+    }
+
+    private boolean hasBtPermission() {
+        return Build.VERSION.SDK_INT < 31
+                || checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void rescan() {
+        if (!hasBtPermission()) {
+            requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, 1);
+        } else {
+            loadDevices();
+        }
     }
 
     // ---------------------------------------------------------------- views
@@ -136,10 +178,14 @@ public class MainActivity extends Activity {
         titleRow.addView(statusPill);
         h.addView(titleRow);
 
+        LinearLayout devRow = new LinearLayout(this);
+        devRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams dr = new LinearLayout.LayoutParams(-1, -2);
+        dr.topMargin = dp(8);
         deviceSpinner = new Spinner(this);
-        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, -2);
-        sp.topMargin = dp(8);
-        h.addView(deviceSpinner, sp);
+        devRow.addView(deviceSpinner, new LinearLayout.LayoutParams(0, -2, 1f));
+        devRow.addView(textBtn("Rescan", v -> rescan()));
+        h.addView(devRow, dr);
 
         LinearLayout btns = new LinearLayout(this);
         LinearLayout.LayoutParams br = new LinearLayout.LayoutParams(-1, -2);
@@ -591,30 +637,47 @@ public class MainActivity extends Activity {
 
     @Override
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
-        if (code == 1 && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) loadDevices();
+        if (code == 1) {
+            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) loadDevices();
+            else append("Nearby devices permission denied. The app needs it to find the headphones. Grant it in Android Settings > Apps, then tap Rescan.");
+        }
     }
 
     @SuppressWarnings("MissingPermission")
     private void loadDevices() {
         BluetoothAdapter adapter = ((BluetoothManager) getSystemService(BLUETOOTH_SERVICE)).getAdapter();
-        if (adapter == null || !adapter.isEnabled()) {
-            append("Bluetooth is off. Turn it on and reopen the app.");
+        if (adapter == null) {
+            append("This device has no Bluetooth.");
             return;
         }
+        if (!adapter.isEnabled()) {
+            append("Bluetooth is off. Turn it on; the list refreshes automatically.");
+            return;
+        }
+        // Keep the current choice selected across a re-scan; fall back to the
+        // remembered device, then anything that looks like a MOMENTUM.
+        BluetoothDevice current = selectedDevice();
+        String keep = current != null ? current.getAddress() : prefs.getString("dev", "");
         devices.clear();
         List<String> names = new ArrayList<>();
-        String remembered = prefs.getString("dev", "");
         int preselect = 0;
+        boolean sawMomentum = false;
         for (BluetoothDevice d : adapter.getBondedDevices()) {
             String name = d.getName() == null ? d.getAddress() : d.getName();
-            if (d.getAddress().equals(remembered) || (remembered.isEmpty() && name.toUpperCase(Locale.ROOT).contains("MOMENTUM")))
-                preselect = devices.size();
+            boolean isM4 = name.toUpperCase(Locale.ROOT).contains("MOMENTUM");
+            if (isM4) sawMomentum = true;
+            if (d.getAddress().equals(keep) || (keep.isEmpty() && isM4)) preselect = devices.size();
             devices.add(d);
             names.add(name);
         }
         deviceSpinner.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, names));
         if (!devices.isEmpty()) deviceSpinner.setSelection(preselect);
-        if (prefs.getBoolean("autostart", false) && selectedDevice() != null) startGuard();
+
+        if (devices.isEmpty()) {
+            append("No paired Bluetooth devices. Pair the MOMENTUM 4 in Android Settings > Bluetooth, then tap Rescan.");
+        } else if (!sawMomentum) {
+            append("No MOMENTUM 4 among the paired devices. Pair it in Android Settings > Bluetooth, then tap Rescan. (Pick another device only if you know it speaks GAIA.)");
+        }
     }
 
     private BluetoothDevice selectedDevice() {
@@ -638,7 +701,9 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> { setConnected(true); readAllConfig(); });
                 readLoop(s.getInputStream());
             } catch (IOException e) {
-                append("Connect failed: " + e.getMessage() + "\nForce stop Smart Control Plus and retry.");
+                append("Connect failed: " + e.getMessage()
+                        + "\nTry: force stop Smart Control Plus; make sure the MOMENTUM 4 is connected to this device;"
+                        + " if it is paired to two other devices (multipoint), disconnect one. Then Connect again.");
                 closeQuietly();
                 runOnUiThread(() -> setConnected(false));
             }
