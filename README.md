@@ -34,7 +34,7 @@ Details: [`docs/protocol.md`](docs/protocol.md) (protocol and command map) and [
 - **Power off now.** One button, with a confirmation.
 - **Noise control and settings.** ANC, transparency and its level, smart pause, auto-answer, low latency, sidetone, plus a readout of battery, model and firmware.
 
-Install: download [`m4-gaia-test-0.5.apk`](android/gaia-test/release/m4-gaia-test-0.5.apk) on the phone and allow the install. It's a self-built app, so Play Protect will warn you. SHA-256 is in [`SHA256SUMS`](android/gaia-test/release/SHA256SUMS). If the app can't connect, force-stop Smart Control Plus, because only one app can use the control channel at a time. More in the [app README](android/gaia-test/README.md).
+Install: on the phone, tap **[Download the APK (v0.5)](https://github.com/rayane1817/momentum4-auto-off/raw/main/android/gaia-test/release/m4-gaia-test-0.5.apk)** and allow the install. It's a self-built app, so Play Protect will warn you. SHA-256 is in [`SHA256SUMS`](android/gaia-test/release/SHA256SUMS). If the app can't connect, force-stop Smart Control Plus, because only one app can use the control channel at a time. More in the [app README](android/gaia-test/README.md).
 
 Known limits:
 - If you wear the headphones in silence (ANC on, no audio) longer than the timeout, the guard switches them off. Raise the timeout if that bothers you.
