@@ -126,7 +126,7 @@ def blocked_reason(frame):
             return "factory reset"
         if feature == 1:
             return "firmware upgrade / DFU mode (feature 1)"
-        if cmd in (0x1405, 0x1406):
+        if cmd in (0x1403, 0x1405, 0x1406):
             return "deletes paired device(s)"
         if cmd == 0x0607 or 0x0609 <= cmd <= 0x06FF:
             return "reset commands next to power-off (per omarchy-momentum4 PROTOCOL.md)"
