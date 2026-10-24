@@ -128,6 +128,8 @@ def blocked_reason(frame):
             return "firmware upgrade / DFU mode (feature 1)"
         if cmd in (0x1405, 0x1406):
             return "deletes paired device(s)"
+        if cmd == 0x0607 or 0x0609 <= cmd <= 0x06FF:
+            return "reset commands next to power-off (per omarchy-momentum4 PROTOCOL.md)"
         if cmd == 0x1500:  # RenameDevice on some models; block the set form if seen
             return "device rename"
     if vendor == QUALCOMM and feature == 6:

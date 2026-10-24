@@ -62,17 +62,22 @@ public class MainActivity extends Activity {
     private TextView statusPill;
     private TextView vBattery, vModel, vFirmware, vHardware, guardStatus, log;
     private ScrollView logScroll;
-    private Segmented noise;
-    private View transpBlock;
-    private SeekBar transpSeek;
-    private TextView transpValue;
-    private Switch swSmartPause, swAutoAnswer, swLowLatency, swSidetone, swAutoStart;
+    private Segmented noise, antiWind;
+    private View customBlock;
+    private SeekBar transpSeek, callSeek;
+    private TextView transpValue, callValue;
+    private Switch swSmartPause, swAutoAnswer, swLowLatency, swHiRes, swOnHead, swAutoStart;
+    private Switch swBass, swSpeech;
+    private static final String[] EQ_BANDS = {"63 Hz", "250 Hz", "1 kHz", "4 kHz", "8 kHz"};
+    private final SeekBar[] eqSeek = new SeekBar[5];
+    private final TextView[] eqValue = new TextView[5];
+    private final java.util.ArrayDeque<Integer> pendingBands = new java.util.ArrayDeque<>();   // 1002 GETs in flight
     private Button guardButton;
     private EditText idleMinutes, secondsField, hexField;
 
     private volatile BluetoothSocket socket;
     private volatile OutputStream out;
-    private boolean ancOn, transpOn, applying;
+    private boolean ancOn, adaptiveOn, applying;
     private SharedPreferences prefs;
 
     // Re-scan the paired-device list when Bluetooth turns on or a device is paired,
@@ -99,6 +104,7 @@ public class MainActivity extends Activity {
         content.setPadding(dp(16), dp(12), dp(16), dp(12));
         content.addView(deviceCard());
         content.addView(noiseCard());
+        content.addView(eqCard());
         content.addView(listeningCard());
         content.addView(guardCard());
         content.addView(powerCard());
@@ -214,59 +220,105 @@ public class MainActivity extends Activity {
 
     private View noiseCard() {
         LinearLayout c = card("NOISE CONTROL");
-        noise = new Segmented(new String[]{"ANC", "Transparency", "Off"}, idx -> {
-            if (idx == 0) { send(a(0x1804, 0)); send(a(0x1A04, 1)); }
-            else if (idx == 1) { send(a(0x1A04, 0)); send(a(0x1804, 1)); }
-            else { send(a(0x1A04, 0)); send(a(0x1804, 0)); }
-            transpBlock.setVisibility(idx == 1 ? View.VISIBLE : View.GONE);
+        // Same frames, same order as Smart Control Plus (docs/config-spec.md, capture 2).
+        noise = new Segmented(new String[]{"Adaptive", "Custom", "Off"}, idx -> {
+            if (idx == 0) { send(a(0x1A04, 1)); send(b2(0x1A00, 3, 1)); ancOn = true; adaptiveOn = true; }
+            else if (idx == 1) {
+                send(b2(0x1A00, 3, 0)); send(a(0x1A04, 1)); send(a(0x1A02, transpSeek.getProgress()));
+                ancOn = true; adaptiveOn = false;
+            } else { send(b2(0x1A00, 3, 0)); send(a(0x1A04, 0)); ancOn = false; adaptiveOn = false; }
+            customBlock.setVisibility(idx == 1 ? View.VISIBLE : View.GONE);
         });
         c.addView(noise.view);
 
-        transpBlock = transparencyBlock();
-        transpBlock.setVisibility(View.GONE);
-        c.addView(transpBlock);
-        return cardWrap(c);
-    }
-
-    private View transparencyBlock() {
         LinearLayout b = new LinearLayout(this);
         b.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.topMargin = dp(12);
         b.setLayoutParams(lp);
+        TextView[] tv = new TextView[1];
+        transpSeek = slider(b, "ANC  ↔  Transparency", 100, tv,
+                p -> p == 0 ? "full ANC" : p == 100 ? "full transparency" : String.valueOf(p),
+                p -> { send(a(0x1A02, p)); send(g(0x1A03)); });
+        transpValue = tv[0];
+        TextView aw = caption("Anti-wind");
+        aw.setPadding(0, dp(8), 0, dp(4));
+        b.addView(aw);
+        antiWind = new Segmented(new String[]{"Off", "Auto", "Max"}, idx -> send(b2(0x1A00, 1, idx)));
+        b.addView(antiWind.view);
+        customBlock = b;
+        customBlock.setVisibility(View.GONE);
+        c.addView(customBlock);
+        return cardWrap(c);
+    }
 
+    /** Labelled SeekBar that sends only on release. tvOut[0] receives the value label. */
+    private SeekBar slider(LinearLayout parent, String label, int max, TextView[] tvOut, IntLabel fmt, OnInt onRelease) {
         LinearLayout cap = new LinearLayout(this);
-        TextView t = caption("Transparency level");
-        cap.addView(t, new LinearLayout.LayoutParams(0, -2, 1f));
-        transpValue = new TextView(this);
-        transpValue.setTextColor(TEXT);
-        transpValue.setTypeface(Typeface.DEFAULT_BOLD);
-        cap.addView(transpValue);
-        b.addView(cap);
-
-        transpSeek = new SeekBar(this);
-        transpSeek.setMax(100);
-        transpSeek.getProgressDrawable().setColorFilter(ACCENT, android.graphics.PorterDuff.Mode.SRC_IN);
-        transpSeek.getThumb().setColorFilter(ACCENT, android.graphics.PorterDuff.Mode.SRC_IN);
-        transpSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onProgressChanged(SeekBar s, int p, boolean user) { transpValue.setText(String.valueOf(p)); }
-            public void onStartTrackingTouch(SeekBar s) {}
-            public void onStopTrackingTouch(SeekBar s) {     // debounce: send only on release
-                if (!applying) { send(a(0x1A02, s.getProgress())); send(g(0x1A03)); }
-            }
+        cap.setPadding(0, dp(4), 0, 0);
+        cap.addView(caption(label), new LinearLayout.LayoutParams(0, -2, 1f));
+        TextView val = new TextView(this);
+        val.setTextColor(TEXT);
+        val.setTypeface(Typeface.DEFAULT_BOLD);
+        cap.addView(val);
+        parent.addView(cap);
+        SeekBar s = new SeekBar(this);
+        s.setMax(max);
+        s.getProgressDrawable().setColorFilter(ACCENT, android.graphics.PorterDuff.Mode.SRC_IN);
+        s.getThumb().setColorFilter(ACCENT, android.graphics.PorterDuff.Mode.SRC_IN);
+        s.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onProgressChanged(SeekBar sb, int p, boolean user) { val.setText(fmt.f(p)); }
+            public void onStartTrackingTouch(SeekBar sb) {}
+            public void onStopTrackingTouch(SeekBar sb) { if (!applying) onRelease.on(sb.getProgress()); }
         });
-        gate(transpSeek);
-        b.addView(transpSeek);
-        return b;
+        val.setText(fmt.f(0));
+        gate(s);
+        parent.addView(s);
+        tvOut[0] = val;
+        return s;
+    }
+
+    private View eqCard() {
+        LinearLayout c = card("EQUALIZER");
+        LinearLayout titleRow = (LinearLayout) ((ViewGroup) c.getParent()).getChildAt(0);
+        Button flat = textBtn("Flat", v -> {
+            for (int i = 0; i < 5; i++) { send(b2(0x1001, i, 0)); setEq(i, 0); }
+        });
+        gate(flat);
+        titleRow.addView(flat);
+        for (int i = 0; i < 5; i++) {
+            final int band = i;
+            TextView[] tv = new TextView[1];
+            // 0..24 = -6.0..+6.0 dB in 0.5 dB steps; wire value = dB x 10, signed byte
+            eqSeek[i] = slider(c, EQ_BANDS[i], 24, tv, p -> String.format(Locale.ROOT, "%+.1f dB", (p - 12) / 2.0),
+                    p -> send(b2(0x1001, band, (p - 12) * 5)));
+            eqValue[i] = tv[0];
+            eqSeek[i].setProgress(12);
+        }
+        swBass = switchRow(c, "Bass boost", on -> toggle(0x1008, on));
+        swSpeech = switchRow(c, "Speech clarity", on -> send(b2(0x0803, 0, on ? 2 : 1)));
+        gate(swBass); gate(swSpeech);
+        return cardWrap(c);
+    }
+
+    private void setEq(int band, int gainX10) {
+        int p = Math.max(0, Math.min(24, Math.round(gainX10 / 5f) + 12));
+        eqSeek[band].setProgress(p);
     }
 
     private View listeningCard() {
         LinearLayout c = card("LISTENING");
         swSmartPause = switchRow(c, "Smart pause", on -> toggle(0x080C, on));
         swAutoAnswer = switchRow(c, "Auto-answer calls", on -> toggle(0x080A, on));
+        swOnHead = switchRow(c, "On-head detection", on -> toggle(0x0400, on));
         swLowLatency = switchRow(c, "Low latency", on -> toggle(0x0817, on));
-        swSidetone = switchRow(c, "Sidetone", on -> toggle(0x0805, on));
-        gate(swSmartPause); gate(swAutoAnswer); gate(swLowLatency); gate(swSidetone);
+        swHiRes = switchRow(c, "Hi-Res 24/96 (restart the headphones after changing)",
+                on -> send(a(0x0405, on ? 0 : 1)));                      // 0 = Hi-Res on
+        gate(swSmartPause); gate(swAutoAnswer); gate(swOnHead); gate(swLowLatency); gate(swHiRes);
+        TextView[] tv = new TextView[1];
+        callSeek = slider(c, "Transparency during calls", 4, tv, p -> p == 0 ? "off" : p + " / 4",
+                p -> { send(a(0x0805, p)); send(g(0x0806)); });
+        callValue = tv[0];
         return cardWrap(c);
     }
 
@@ -584,10 +636,12 @@ public class MainActivity extends Activity {
 
     interface OnBool { void on(boolean checked); }
     interface OnInt { void on(int index); }
+    interface IntLabel { String f(int v); }
 
     // ----------------------------------------------------- frame shorthands
 
     private static byte[] a(int cmd, int v) { return Gaia.build(Gaia.SENNHEISER, cmd, (byte) v); }
+    private static byte[] b2(int cmd, int x, int y) { return Gaia.build(Gaia.SENNHEISER, cmd, (byte) x, (byte) y); }
     private static byte[] g(int cmd) { return Gaia.build(Gaia.SENNHEISER, cmd); }
     private static byte[] g(int cmd, int v) { return Gaia.build(Gaia.SENNHEISER, cmd, (byte) v); }
 
@@ -610,21 +664,43 @@ public class MainActivity extends Activity {
             case 0x1200: if (f.payload.length >= 2) vHardware.setText(String.valueOf(Gaia.u16(f.payload, 0)));
                 else if (b0 >= 0) vHardware.setText(String.valueOf(b0));
                 break;
-            case 0x1A05: ancOn = b0 == 1; refreshNoise(); break;
-            case 0x1805: transpOn = b0 == 1; refreshNoise(); break;
-            case 0x1A03: if (b0 >= 0) { transpSeek.setProgress(b0); transpValue.setText(String.valueOf(b0)); } break;
+            case 0x1A05: if (b0 >= 0 && f.type() != 3) { ancOn = b0 == 1; refreshNoise(); } break;
+            case 0x1A01:                                                     // [mode,state] pairs: 1 anti-wind, 3 adaptive
+                if (f.type() == 3) break;
+                for (int i = 0; i + 1 < f.payload.length; i += 2) {
+                    int mode = f.payload[i] & 0xFF, st = f.payload[i + 1] & 0xFF;
+                    if (mode == 3) adaptiveOn = st == 1;
+                    if (mode == 1 && st <= 2) antiWind.select(st, false);
+                }
+                refreshNoise();
+                break;
+            case 0x1A03: if (b0 >= 0 && b0 <= 100 && f.type() != 3) transpSeek.setProgress(b0); break;
             case 0x080D: swSmartPause.setChecked(b0 == 1); break;
             case 0x080B: swAutoAnswer.setChecked(b0 == 1); break;
             case 0x0818: swLowLatency.setChecked(b0 == 1); break;
-            case 0x0806: swSidetone.setChecked(b0 == 1); break;
+            case 0x0401: if (f.type() != 3 && b0 >= 0) swOnHead.setChecked(b0 == 1); break;
+            case 0x0406: if (f.type() != 3 && b0 >= 0) swHiRes.setChecked(b0 == 0); break;   // 0 = Hi-Res on
+            case 0x0806: if (f.type() != 3 && b0 >= 0 && b0 <= 4) callSeek.setProgress(b0); break;
+            case 0x1009: if (f.type() != 3 && b0 >= 0) swBass.setChecked(b0 == 1); break;
+            case 0x0804: if (f.type() != 3 && f.payload.length >= 2) swSpeech.setChecked(Gaia.u16(f.payload, 0) == 2); break;
+            case 0x1002:                                                     // 1082 notif = all 5 bands, 1102 resp = one band
+                if (f.type() == 1 && f.payload.length >= 5) {
+                    for (int i = 0; i < 5; i++) setEq(i, f.payload[i]);
+                } else if (f.type() == 2 && f.payload.length >= 1) {
+                    Integer band = pendingBands.poll();
+                    if (band != null) setEq(band, f.payload[0]);
+                } else if (f.type() == 3) {
+                    pendingBands.poll();
+                }
+                break;
         }
         applying = false;
     }
 
     private void refreshNoise() {
-        int idx = transpOn ? 1 : ancOn ? 0 : 2;
+        int idx = !ancOn ? 2 : adaptiveOn ? 0 : 1;
         noise.select(idx, false);
-        transpBlock.setVisibility(idx == 1 ? View.VISIBLE : View.GONE);
+        customBlock.setVisibility(idx == 1 ? View.VISIBLE : View.GONE);
     }
 
     private static String ascii(byte[] p) {
@@ -698,7 +774,7 @@ public class MainActivity extends Activity {
                 s.connect();
                 socket = s;
                 out = s.getOutputStream();
-                runOnUiThread(() -> { setConnected(true); readAllConfig(); });
+                runOnUiThread(() -> { setConnected(true); registerNotifications(); readAllConfig(); });
                 readLoop(s.getInputStream());
             } catch (IOException e) {
                 append("Connect failed: " + e.getMessage()
@@ -758,9 +834,16 @@ public class MainActivity extends Activity {
 
     private void readAllConfig() {
         if (out == null) { toast("Connect first"); return; }
-        int[] gets = {0x1A05, 0x1805, 0x1A03, 0x080D, 0x080B, 0x0818, 0x0806,
-                0x0603, 0x1206, 0x1201, 0x1200};
+        int[] gets = {0x1A05, 0x1A01, 0x1A03, 0x080D, 0x080B, 0x0818, 0x0806, 0x0401, 0x0406,
+                0x1009, 0x0804, 0x0603, 0x1206, 0x1201, 0x1200};
         for (int x : gets) send(g(x));
+        pendingBands.clear();
+        for (int i = 0; i < 5; i++) { pendingBands.add(i); send(g(0x1002, i)); }
+    }
+
+    /** Ask for change notifications (noise 0x0d, EQ 0x08, audio/device 0x04), as the official app does. */
+    private void registerNotifications() {
+        for (int feat : new int[]{0x0d, 0x08, 0x04}) send(g(0x0007, feat));
     }
 
     private void setTimer0() {
