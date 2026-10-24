@@ -72,7 +72,7 @@ COMMANDS = {
     0x080B: _c("auto-answer get", "get", 0x080B, EMPTY, "capture1", "confirmed", notif=0x088B),
     0x080C: _c("smart pause set", "set", 0x080C, BOOL, "capture2", "confirmed", get_for=0x080D),
     0x080D: _c("smart pause get", "get", 0x080D, EMPTY, "capture1", "confirmed", notif=0x088D),
-    0x0814: _c("comfort call set", "set", 0x0814, BOOL, "omarchy", "claimed", get_for=0x0815),
+    0x0814: _c("comfort call set", "set", 0x0814, BOOL, "capture3", "confirmed", get_for=0x0815),
     0x0815: _c("comfort call get", "get", 0x0815, EMPTY, "capture1", "confirmed", notif=0x0895),
     0x0817: _c("low latency set", "set", 0x0817, BOOL, "oldapp", "claimed", get_for=0x0818),
     0x0818: _c("low latency get", "get", 0x0818, EMPTY, "oldapp", "claimed", notif=0x0898),
@@ -91,8 +91,8 @@ COMMANDS = {
     0x1401: _c("paired device name get", "get", 0x1401, [(("u8", 0, 7),)], "omarchy", "claimed"),
     0x1407: _c("audio mode change pending get", "get", 0x1407, EMPTY, "omarchy", "claimed"),
     # ---- feature 11: MMI
-    0x1606: _c("touch controls set (0 = on)", "set", 0x1606, BOOL, "omarchy", "claimed", get_for=0x1607),
-    0x1607: _c("touch controls get (0 = on)", "get", 0x1607, EMPTY, "omarchy", "claimed", notif=0x1687),
+    0x1606: _c("touch controls set (0 = on)", "set", 0x1606, BOOL, "capture3", "confirmed", get_for=0x1607),
+    0x1607: _c("touch controls get (0 = on)", "get", 0x1607, EMPTY, "capture3", "confirmed", notif=0x1687),
     # ---- feature 13: noise control
     0x1A00: _c("noise sub-mode set", "set", 0x1A00,
                [(("const", 1), ("u8", 0, 2)),                      # anti-wind 0 off / 1 / 2
@@ -119,6 +119,8 @@ SEEN_LABELS = {
     0x1402: "device connect [idx]", 0x1405: "BLOCKED device delete/disconnect [idx]",
     0x1403: "NEVER: forget device (omarchy)", 0x1406: "BLOCKED delete pairing list",
     0x0040: "BLOCKED factory reset",
+    0x1800: "feature 12 SET seen from SCP (auto-pause in transparency?), unconfirmed",
+    0x1801: "feature 12 GET seen at connect", 0x1805: "transparency get (seen at connect)",
 }
 
 # Snapshot GET list (plan Phase 3.2). key -> (cmd, payload bytes)

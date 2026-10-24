@@ -85,7 +85,7 @@
    ],
    "restore": [{"set": ["1001", "00 {eq0}"]}]},
 
-  {"id": "7", "label": "EQ all-gains read 1003 (claimed) vs 1002 [0..4]",
+  {"id": "7", "label": "EQ all-gains read 1003 (claimed; error 05 on 3.38.3, T15)",
    "save": {"e0": ["1002", "00"], "e1": ["1002", "01"], "e2": ["1002", "02"], "e3": ["1002", "03"], "e4": ["1002", "04"]},
    "actions": [
     {"get": ["1003"], "expect": "{e0} {e1} {e2} {e3} {e4}"}
@@ -135,7 +135,7 @@
     {"set": ["0805", "00"]}, {"get": ["0806"], "expect": "00"},
     {"clear_notifs": true},
     {"set": ["0805", "04"]}, {"get": ["0806"], "expect": "04"},
-    {"expect_notif": ["0886"]}
+    {"expect_notif": ["0886"], "soft": true, "note_fw3383": "no notif on 3.38.3 (T15)"}
    ],
    "restore": [{"set": ["0805", "{ct}"]}]},
 
@@ -163,7 +163,7 @@
     {"clear_notifs": true},
     {"set": ["0814", "{cc^1}"]},
     {"get": ["0815"], "expect": "{cc^1}"},
-    {"expect_notif": ["0895"]}
+    {"expect_notif": ["0895"], "soft": true, "note_fw3383": "no notif on 3.38.3 (T15)"}
    ],
    "restore": [{"set": ["0814", "{cc}"]}]},
 
@@ -171,7 +171,8 @@
    "save": {"tc": ["1607"]},
    "actions": [
     {"set": ["1606", "01"]},
-    {"get": ["1607"], "expect": "01"}
+    {"get": ["1607"], "expect": "01"},
+    {"expect_notif": ["1687"], "soft": true}
    ],
    "restore": [{"set": ["1606", "{tc}"]}]}
  ]

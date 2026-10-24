@@ -84,10 +84,10 @@ The official app never writes `1804`. Its three modes are built from `1A04` (ANC
 | **Personnalisé** (custom) | `1A00 [03 00]`, `1A04 [01]`, then the slider |
 | custom slider ANC ↔ Transparence | `1A02 [level]`, 0 = full ANC (left), 50 = middle, 100 = full transparency (right) |
 | **ARRÊT** (off) | `1A00 [03 00]`, `1A04 [00]` |
-| Anti-vent off / Auto / Max | `1A00 [01 00]` / `1A00 [01 01]` / `1A00 [01 02]` |
-- `1A00` payload is `[mode, state]`: mode 1 = anti-wind (0 off, 1 Auto, 2 Max), mode 3 = adaptive (0 off, 1 on). Mode 2 is reported in `1A81` but never written.
+| Anti-vent off / Auto / Max | `1A00 [01 00]` / `1A00 [01 02]` / `1A00 [01 01]` (corrected by Capture 3, T17: 1 = Max, 2 = Auto) |
+- `1A00` payload is `[mode, state]`: mode 1 = anti-wind (0 off, 1 Max, 2 Auto; Capture 3), mode 3 = adaptive (0 off, 1 on). Mode 2 is reported in `1A81` but never written.
 - Anti-wind is only offered in the app while in custom mode.
-- Ready-to-send: adaptive `FF 03 00 01 04 95 1A 04 01` + `FF 03 00 02 04 95 1A 00 03 01`; off `FF 03 00 02 04 95 1A 00 03 00` + `FF 03 00 01 04 95 1A 04 00`; anti-wind Max `FF 03 00 02 04 95 1A 00 01 02`.
+- Ready-to-send: adaptive `FF 03 00 01 04 95 1A 04 01` + `FF 03 00 02 04 95 1A 00 03 01`; off `FF 03 00 02 04 95 1A 00 03 00` + `FF 03 00 01 04 95 1A 04 00`; anti-wind Max `FF 03 00 02 04 95 1A 00 01 01`, Auto `... 1A 00 01 02`.
 
 ### Transparency during calls ("Appels téléphoniques") = `0805`
 `0805 [0-4]`: 0 = off (toggle off), 1-4 = strength low to high (slider). GET `0806` → `0906 [level]`; default 2. This is what the old app called sidetone.
@@ -110,3 +110,15 @@ On-head detection `0400 [0/1]`, smart pause `080C [0/1]`, auto-answer `080A [0/1
 - **Voice-prompt language** and the reboot after it go through the Qualcomm upgrade/data-transfer feature (`001D` feature 6). There is no standalone reboot command; it is the upgrade flow's own restart. Not implemented, stays blocked.
 - **Connection management**: connect `1402 [index]`; the app's disconnect action sent `1405 [index]`, which the old app names "delete entry". Kept blocked until it's clear whether it removes the pairing.
 - Feature 16 (`2001/2003/2005/2007`, notif `2081 00`), `2601` (error), `081A/081D/081E` (error 01 "not supported") are read at connect; meaning unknown.
+
+## Capture 3 + PC checks (25 Oct 2026, local Windows session, T15-T17)
+Details: `captures/capture3_scp_writes_redacted.md`. PC checks: `windows-client/checks/v08.json` with `gaia_client.py check`.
+- **Anti-wind: 1 = Max, 2 = Auto** (SCP sends `[01 01]` for Max, `[01 02]` for Auto, twice each; switching on sends `[01 02]`). The Capture 2 mapping above was swapped; omarchy was right. Smart Control Plus does not read this byte back: its detail page showed "Auto" for headset values 1 and 2 (T16).
+- **`1A00` 6-byte form** `[01 a 02 t 03 d]` is accepted on 3.38.3, same as the 2-byte form (T15 step 5). Keep the 2-byte form (what SCP sends).
+- **Comfort call `0814 [0/1]`**: confirmed (SCP sends it, readback `0815`), not inverted, no notification.
+- **Touch controls `1606 [0/1]`**: confirmed, inverted (01 = off, SCP shows "Commandes: Désactivé"), notification `1687`.
+- **Auto power-off "Never"** = `0600 [00 00 00]`. In SCP the tile (like Smart Pause and auto-answer) is disabled while on-head detection is off.
+- **`1003`** (EQ all gains, omarchy) answers error 05 with an empty payload on 3.38.3. Not retried.
+- **No notification** on 3.38.3 for `0805` (call transparency), `0814`, `080C`, `080A`. Notifications seen: `1A81/1A83/1A85`, `1082`, `1089`, `0884`, `0898`, `1687`.
+- `1407` read `01` at session start and stayed `01` through a Hi-Res toggle and restore.
+- Unknown SET `1800 [0/1]` (resp `1900`, GET `1801`) seen from SCP before this session: feature 12, probably "Pause automatique" in transparency. Unconfirmed.

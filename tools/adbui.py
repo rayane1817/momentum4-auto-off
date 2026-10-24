@@ -129,8 +129,10 @@ def swipe_seek(node, fraction):
 
 def shot(path):
     png = adb("exec-out", "screencap", "-p")
-    if not png.startswith(b"\x89PNG"):
+    i = png.find(b"\x89PNG")          # foldables print a multi-display warning first
+    if i < 0:
         raise RuntimeError("screencap did not return a PNG")
+    png = png[i:]
     with open(path, "wb") as fh:
         fh.write(png)
 

@@ -1,0 +1,9 @@
+{"name": "oracle_a", "about": "Phase 5 visit A: leave Custom + anti-wind 1 + comfort call 1 + touch off (1606 [01]) for SCP to display. No restore here: restore_baseline.json does it.",
+ "register": false,
+ "steps": [
+  {"id": "A", "label": "Custom, anti-wind 1, comfort 1, touch off",
+   "actions": [
+    {"set": ["1A00", "03 00"]}, {"set": ["1A04", "01"]}, {"set": ["1A00", "01 01"]},
+    {"get": ["1A01"], "expect": "01 01 02 ?? 03 00"},
+    {"set": ["0814", "01"]}, {"get": ["0815"], "expect": "01"},
+    {"set": ["1606", "01"]}, {"get": ["1607"], "expect": "01"}]}]}

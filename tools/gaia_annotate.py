@@ -118,6 +118,9 @@ def gaia_frames(uih):
                 i += 1
             if len(buf) - i < 8:
                 break
+            if buf[i + 1] not in (0x03, 0x04) or ((buf[i + 4] << 8) | buf[i + 5]) not in VENDORS:
+                i += 1                     # not a frame start: resync on the next FF
+                continue
             plen = (buf[i + 2] << 8) | buf[i + 3]
             if len(buf) - i < 8 + plen:
                 break
