@@ -99,6 +99,13 @@ Decompile the official APK + Bluetooth HCI logging, then build our own small And
 Step 1 done (22 Oct 2026): docs/protocol.md. GAIA v3 over RFCOMM, vendor 0x0495, timer cmd 0600/0601. No dedicated power-off command; lead = MMI action `powerOff`. Next: Step 2 HCI capture by Ryane.
 Old Smart Control 4.0.0 (oldest on mirrors, already supports M4 + auto-off) analysed: timer cmd takes a timer number, 0 = POWER_OFF_TIMER, 1 = LIMBO_TIMEOUT (never set by any app). Hypothesis: auto-off only reaches Qualcomm "limbo"; limbo timeout decides true power-off. First test: read timer 1 (`FF 03 00 01 04 95 06 01 01`), set it short, repeat T2. Never send 0495:0200 (enter DFU) or 0040 (factory reset).
 
+## Local session (Windows)
+Plan: docs/local-session-plan.md.
+- Work only from `%USERPROFILE%\src\momentum4-auto-off`. Raw data goes to `%USERPROFILE%\m4-private\`, never into the repo. Absolute `--log`.
+- Only documented commands (tools/m4_commands.py). Protocol writes via `gaia_client.py check` only. Blocklists stay (tools/blocklist_parity_test.py). No sweeps. `0605` only via the app guard in the final phase.
+- Each test entry: fw, app and version, cups, case, result.
+- Group human requests. Only the start and end checklists, plus failure-table prompts.
+
 ## Other build directions considered
 - Hardware workaround: a magnet on a desk stand/hook at the spot where the case magnet sits, to trigger the case switch-off (r/sennheiser 154aet4 user tried this). Needs locating the Hall sensor.
 - Android automation: switch media output away from the M4 / send a hard power-off when idle.
