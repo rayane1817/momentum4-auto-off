@@ -72,3 +72,41 @@ Unlike ACCENTUM (independent toggles only, combined mode all-zero), the M4 expos
 2. **Toggles:** Smart Pause, Auto-answer, Comfort call, Low latency, On-head detection, BT compatibility — each a read + on/off pair of small buttons.
 3. **Device info:** one "Read device info" button that fires battery+model+firmware+hw and prints the decoded lines.
 Each control should read-back after a set (send the GET) so the log shows the stored value, same pattern as the timer buttons.
+
+## Capture 2 (24 Oct 2026): Smart Control Plus settings, decoded
+Source: HCI snoop from Ryane's phone (not committed, contains device names and serial), session 22:17-23:00, M4 fw 3.38.3. This session the app used RFCOMM DLCI 3, not 30: always resolve the GAIA channel by SDP/UUID. Values below are what the official app actually sent; headset replies/notifications confirm each.
+
+### Noise control (feature 13) — supersedes the "uncertain" notes above
+The official app never writes `1804`. Its three modes are built from `1A04` (ANC master), `1A00` (sub-modes) and `1A02` (level):
+| app action | frames sent (in order) |
+|---|---|
+| **Adaptatif** | `1A04 [01]`, `1A00 [03 01]` |
+| **Personnalisé** (custom) | `1A00 [03 00]`, `1A04 [01]`, then the slider |
+| custom slider ANC ↔ Transparence | `1A02 [level]`, 0 = full ANC (left), 50 = middle, 100 = full transparency (right) |
+| **ARRÊT** (off) | `1A00 [03 00]`, `1A04 [00]` |
+| Anti-vent off / Auto / Max | `1A00 [01 00]` / `1A00 [01 01]` / `1A00 [01 02]` |
+- `1A00` payload is `[mode, state]`: mode 1 = anti-wind (0 off, 1 Auto, 2 Max), mode 3 = adaptive (0 off, 1 on). Mode 2 is reported in `1A81` but never written.
+- Anti-wind is only offered in the app while in custom mode.
+- Ready-to-send: adaptive `FF 03 00 01 04 95 1A 04 01` + `FF 03 00 02 04 95 1A 00 03 01`; off `FF 03 00 02 04 95 1A 00 03 00` + `FF 03 00 01 04 95 1A 04 00`; anti-wind Max `FF 03 00 02 04 95 1A 00 01 02`.
+
+### Transparency during calls ("Appels téléphoniques") = `0805`
+`0805 [0-4]`: 0 = off (toggle off), 1-4 = strength low to high (slider). GET `0806` → `0906 [level]`; default 2. This is what the old app called sidetone.
+
+### Hi-Res 24/96 = `0405`
+`0405 [00]` = Hi-Res **on**, `0405 [01]` = Hi-Res off (old app: 0 "better audio", 1 "better compatibility"). GET `0406` → `0506`. The setting persisted across a manual reboot (`0506 00` after reconnect). The app only advises a reboot; it sends no reboot command.
+
+### EQ (feature 8)
+- Presets are applied app-side: the app writes all five bands with `1001 [band, gain]` (band 0-4 = 63 Hz, 250 Hz, 1 kHz, 4 kHz, 8 kHz; gain = signed byte, dB × 10, e.g. `14` = +2.0 dB, `EC` = -2.0 dB, `23` = +3.5 dB). No preset id is sent.
+- GET one band: `1002 [band]` → `1102 [gain]`. Notification `1082 [5 gains]` after every change.
+- Bass boost ("Amplification des basses"): `1008 [01]` on / `1008 [00]` off; GET `1009`.
+- Speech Clarity: `0803 [00 02]` on / `0803 [00 01]` off (u16 audio mode: 1 normal, 2 speech).
+
+### Confirmed (already in app)
+On-head detection `0400 [0/1]`, smart pause `080C [0/1]`, auto-answer `080A [0/1]`. Voice-prompt mode `0801 [02]` (= voice prompts).
+
+### Not captured / not used
+- **Comfort call**: only the GET (`0815` → `0915 00`) appears; no `0814` write in this capture. Still unconfirmed.
+- **Auto-pause in transparency**: no matching write found.
+- **Voice-prompt language** and the reboot after it go through the Qualcomm upgrade/data-transfer feature (`001D` feature 6). There is no standalone reboot command; it is the upgrade flow's own restart. Not implemented, stays blocked.
+- **Connection management**: connect `1402 [index]`; the app's disconnect action sent `1405 [index]`, which the old app names "delete entry". Kept blocked until it's clear whether it removes the pairing.
+- Feature 16 (`2001/2003/2005/2007`, notif `2081 00`), `2601` (error), `081A/081D/081E` (error 01 "not supported") are read at connect; meaning unknown.

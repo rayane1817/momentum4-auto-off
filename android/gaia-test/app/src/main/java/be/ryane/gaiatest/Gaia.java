@@ -68,6 +68,7 @@ final class Gaia {
             if (cmd == 0x0040) return "factory reset";
             if (feature == 1) return "feature 1 = firmware update / DFU mode";
             if (cmd == 0x1405 || cmd == 0x1406) return "deletes paired devices";
+            if (cmd == 0x0607 || (cmd >= 0x0609 && cmd <= 0x06FF)) return "reset commands next to power-off";
         }
         if (vendor == QUALCOMM && feature == 6) return "Qualcomm upgrade feature";
         return null;
@@ -140,7 +141,15 @@ final class Gaia {
                     m.append(' ').append(modeName(p[i] & 0xFF)).append('=').append(p[i + 1] & 0xFF);
                 }
                 return m.toString();
-            case 0x0806: return "sidetone " + onOff(b0);
+            case 0x0806: return "call transparency = " + b0 + (b0 == 0 ? " (off)" : "/4");
+            case 0x0406: return "Hi-Res " + (b0 == 0 ? "ON" : b0 == 1 ? "off" : "?(" + b0 + ")");   // 0 = on
+            case 0x0401: return "on-head detection " + onOff(b0);
+            case 0x1009: return "bass boost " + onOff(b0);
+            case 0x0804: return "speech clarity " + (p.length >= 2 && u16(p, 0) == 2 ? "ON" : "off");
+            case 0x1002:                                                            // 1082 notif = 5 gains, 1102 resp = 1 gain
+                StringBuilder e = new StringBuilder("EQ dB:");
+                for (byte x : p) e.append(' ').append(x / 10.0);
+                return e.toString();
             case 0x080D: return "smart pause " + onOff(b0);
             case 0x080B: return "auto-answer calls " + onOff(b0);
             case 0x0815: return "comfort call " + onOff(b0);

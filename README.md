@@ -11,7 +11,7 @@ Unofficial community project. Not affiliated with or endorsed by Sennheiser or S
 | | |
 |---|---|
 | Remote power-off command | Found and confirmed: `0495:0605` |
-| Android app with automatic power-off when idle | Confirmed working in v0.3. v0.5 adds a new interface and settings controls, not yet tested on the headphones |
+| Android app with automatic power-off when idle | Confirmed working in v0.3. v0.8 adds Smart Control Plus settings (noise modes, EQ, Hi-Res, call transparency), not yet tested on the headphones |
 | PC command-line client (Windows, Linux) | Working |
 | Tested on | One MOMENTUM 4 (M4AEBT SE), firmware 3.38.3, Samsung phone |
 | Other firmware versions or models | Unknown, reports welcome |
@@ -36,9 +36,9 @@ Details: [`docs/protocol.md`](docs/protocol.md) (protocol and command map) and [
 
 - **Auto power-off when idle.** A background guard watches the phone. When no audio has played and there has been no call for the set time (default 15 minutes), it connects to the headphones and sends `0605`. Nothing else holds the connection while it waits.
 - **Power off now.** One button, with a confirmation.
-- **Noise control and settings.** ANC, transparency and its level, smart pause, auto-answer, low latency, sidetone, plus a readout of battery, model and firmware.
+- **Noise control and settings.** Adaptive / Custom / Off noise control with an ANC-transparency slider and anti-wind, a 5-band EQ with bass boost and speech clarity, Hi-Res, on-head detection, call transparency, smart pause, auto-answer, low latency, plus a readout of battery, model and firmware.
 
-Install: on the phone, tap **[Download the APK (v0.5)](https://github.com/rayane1817/momentum4-auto-off/raw/main/android/gaia-test/release/m4-gaia-test-0.5.apk)** and allow the install. It's a self-built app, so Play Protect will warn you. SHA-256 is in [`SHA256SUMS`](android/gaia-test/release/SHA256SUMS). If the app can't connect, force-stop Smart Control Plus, because only one app can use the control channel at a time. More in the [app README](android/gaia-test/README.md).
+Install: on the phone, tap **[Download the APK (v0.8)](https://github.com/rayane1817/momentum4-auto-off/raw/main/android/gaia-test/release/m4-gaia-test-0.8.apk)** and allow the install. It's a self-built app, so Play Protect will warn you. SHA-256 is in [`SHA256SUMS`](android/gaia-test/release/SHA256SUMS). If the app can't connect, force-stop Smart Control Plus, because only one app can use the control channel at a time. More in the [app README](android/gaia-test/README.md).
 
 Known limits:
 - If you wear the headphones in silence (ANC on, no audio) longer than the timeout, the guard switches them off. Raise the timeout if that bothers you.
@@ -57,7 +57,7 @@ More in the [client README](windows-client/README.md).
 
 ## Safety
 
-Both tools refuse commands that could do damage, whatever you type: factory reset, firmware update mode, deleting paired devices and Qualcomm's upgrade feature. Use at your own risk anyway. This is a hobby project tested on one pair of headphones.
+Both tools refuse commands that could do damage, whatever you type: factory reset, firmware update mode, reset commands, deleting paired devices and Qualcomm's upgrade feature. Use at your own risk anyway. This is a hobby project tested on one pair of headphones.
 
 ## Help wanted
 

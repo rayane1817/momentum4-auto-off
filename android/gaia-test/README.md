@@ -3,7 +3,7 @@
 Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control channel (RFCOMM, UUID `a2129ff3-081b-4c45-8afe-469d9c4842ec`) and sends single commands. No internet permission, no libraries, Bluetooth only.
 
 ## Install (Samsung)
-1. On the phone, open this repo on GitHub, go to `android/gaia-test/release/` and download the latest `m4-gaia-test-*.apk` (currently 0.5).
+1. On the phone, open this repo on GitHub, go to `android/gaia-test/release/` and download the latest `m4-gaia-test-*.apk` (currently 0.8), or grab it from the Releases page.
 2. Open it. Samsung asks to allow installs from that app (Chrome / My Files): allow once.
 3. Google Play Protect may warn about an unknown app: "Install anyway". It's our own debug-signed build.
 
@@ -12,6 +12,15 @@ Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control cha
 2. Headphones on and connected to the phone as usual.
 3. Open "M4 GAIA test", allow "Nearby devices", pick the MOMENTUM 4, tap Connect.
 4. Tap the buttons, then "Copy log" and paste the log in the chat.
+
+## Smart Control Plus parity (v0.8)
+Built from the capture-2 decode (`../docs/config-spec.md`), same frames as the official app:
+- **Noise control**: Adaptive / Custom / Off. Custom shows an ANC ↔ Transparency slider (`1A02`, 0 = full ANC, 100 = full transparency) and anti-wind Off / Auto / Max (`1A00 01 x`). `1804` is no longer used.
+- **Equalizer**: 5 bands (63 Hz, 250 Hz, 1 kHz, 4 kHz, 8 kHz), -6 to +6 dB in 0.5 dB steps (`1001`), Flat button, bass boost (`1008`), speech clarity (`0803`).
+- **Listening**: on-head detection (`0400`), Hi-Res 24/96 (`0405`, restart the headphones after changing), and a 0-4 "transparency during calls" slider (`0805`) that replaces the old Sidetone switch.
+- On connect the app registers for change notifications (`0007` for features 0x0d, 0x08, 0x04), so changes made on the headset show up live.
+- Safety: `0607` and `0609`-`06FF` (reset commands next to power-off, per omarchy-momentum4's PROTOCOL.md) are now blocked too.
+- Unconfirmed: anti-wind Auto/Max values may be swapped (another project reports 1 = Max, 2 = Auto). Sliders send only on release.
 
 ## UI (v0.5)
 Redesigned to a clean card layout (spec: `../docs/ux-spec.md`): a header with a Connected/Disconnected pill, device picker and Connect/Disconnect; a DEVICE card (battery, model, firmware, hardware); a NOISE CONTROL card with a 3-way ANC / Transparency / Off segmented control and a transparency slider; a LISTENING card of switches (smart pause, auto-answer, low latency, sidetone); a prominent AUTO POWER-OFF card (default 15 min, Start/Stop, "start automatically when the app opens"); a red POWER OFF NOW; and collapsed ADVANCED (firmware timer, raw hex) and LOG sections. Controls grey out when disconnected. The idle-guard card stays usable while disconnected (the guard connects on its own).
