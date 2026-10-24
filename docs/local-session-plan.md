@@ -140,6 +140,14 @@ python windows-client\gaia_client.py diff $P\snap_before.json $P\snap_after.json
 Results:
 - Test 5: accepted means both forms work, so record it and keep the 2-byte form (that's what the official app sends). Error 05/83 means only the 2-byte form works on 3.38.3, and omarchy's note applies to other firmware. Either way, close the conflict in prior-art.md.
 - A readback **can't** tell Auto from Max. Phase 5 does that.
+- **Hi-Res restart-pending check (`1407`), its own pass/fail.** Smart Control Plus only advises a restart after Hi-Res; we want to know if the headset itself says one is needed. `1407` is a GET only (omarchy: "audio mode change pending"), never write it.
+  1. Read `1407` and `0406`. Record both (baseline, expect pending = 0).
+  2. Toggle Hi-Res once with `0405` to the opposite value. Do NOT restore it yet.
+  3. Read `1407` right away, then again after 10 s. PASS: it changes to a pending value (e.g. 01). If it stays 0, record "1407 does not track Hi-Res on 3.38.3".
+  4. Toggle Hi-Res back to the baseline and read `1407` again: does pending clear without a restart? Record it.
+  5. Toggle Hi-Res to the opposite value a second time and leave it there. The single power cycle in Phase 9 to 10 is its restart.
+  6. After the restart (Phase 10): read `1407` (expect 0 again) and `0406` (expect the new value kept). Then restore Hi-Res to the baseline. That restore makes pending = 1 again; leave it, and note it in the handback (Ryane's next normal power cycle clears it).
+  7. Record in docs/config-spec.md: the `1407` values seen, and whether it is a reliable "restart needed" signal. If yes, the cloud adds a "Restart needed" hint next to the Hi-Res switch in the app.
 - A notification is "not expected" for features we don't register (feature 2 `04xx`, feature 3 `06xx`, feature 11 `16xx`). Don't register extra features: that would be a new, undocumented use of `0007`.
 
 Pass: every step gets its resp (no error), the GET readback matches, every captured-feature SET has its notif, and the before/after diff is empty. Any FAIL is logged with the exact frames. Don't retry it with other payloads.
@@ -217,7 +225,7 @@ Setup: PC client disconnected (the guard connects on its own when it fires), SCP
 ### Phase 10: End checklist (H, one batch), then A finishes - 10 min
 H: the **end checklist** (section 6): button press, a touch test, listening.
 A, afterwards:
-- `gaia_client.py verify`, then `snapshot` gives `snap_post_reboot.json`. Check that Hi-Res (`0406`) holds the value set before the power cycle, and record `1407` before/after the restart.
+- `gaia_client.py verify`, then `snapshot` gives `snap_post_reboot.json`. Finish the Hi-Res restart-pending check (Phase 4 results, steps 6-7): `0406` holds the new value, `1407` back to 0, then restore Hi-Res.
 - Restore every value to `snap_before.json` with a `check` restore file. The final diff must be empty.
 - Touch test, prepared by the agent: right before the checklist, the PC sets `1606 [01]` (touch off). After Ryane reports, it restores `[00]` and Ryane does the second tap. That's one batch.
 
