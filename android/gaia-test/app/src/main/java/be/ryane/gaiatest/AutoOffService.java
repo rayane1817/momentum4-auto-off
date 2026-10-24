@@ -153,6 +153,7 @@ public class AutoOffService extends Service {
     }
 
     private static synchronized void appendLog(String line) {
+        android.util.Log.i("M4GUARD", line);  // adb logcat -s M4GUARD
         LOG.append(new SimpleDateFormat("HH:mm:ss", Locale.ROOT).format(new Date())).append(" ").append(line).append("\n");
         if (LOG.length() > 8000) LOG.delete(0, LOG.length() - 8000);
     }

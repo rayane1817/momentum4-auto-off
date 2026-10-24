@@ -907,6 +907,7 @@ public class MainActivity extends Activity {
     }
 
     private void append(String line) {
+        android.util.Log.i("M4GAIA", line);   // readable over USB: adb logcat -s M4GAIA
         String stamp = new SimpleDateFormat("HH:mm:ss", Locale.ROOT).format(new Date());
         runOnUiThread(() -> { log.append(stamp + " " + line + "\n"); logScroll.post(() -> logScroll.fullScroll(View.FOCUS_DOWN)); });
     }
