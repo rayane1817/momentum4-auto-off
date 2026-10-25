@@ -130,15 +130,23 @@ public class AutoOffService extends Service {
         }
     }
 
+    /** Per-attempt connect limit. Longer than the widgets' 4.5 s: the guard has no broadcast deadline. */
+    static final long CONNECT_DEADLINE_MS = 8000;
+
     private boolean sendPowerOff(String addr) {
         BluetoothSocket sock = null;
         try {
             BluetoothAdapter adapter = ((BluetoothManager) getSystemService(BLUETOOTH_SERVICE)).getAdapter();
             BluetoothDevice device = adapter.getRemoteDevice(addr);
             for (int attempt = 1; attempt <= 3 && !stop; attempt++) {
+                Watchdog dog = null;
                 try {
                     sock = device.createRfcommSocketToServiceRecord(Gaia.SERVICE_UUID);
+                    // connect() has no timeout of its own; the watchdog closes the socket so it throws.
+                    dog = Watchdog.closeAfter(sock, CONNECT_DEADLINE_MS);
                     sock.connect();
+                    dog.close();
+                    if (dog.fired()) throw new IOException("connect timeout after " + CONNECT_DEADLINE_MS + " ms");
                     OutputStream out = sock.getOutputStream();
                     out.write(Gaia.powerOff());
                     out.flush();
@@ -146,10 +154,13 @@ public class AutoOffService extends Service {
                     sleep(2000);     // let the headset act before the link drops
                     return true;
                 } catch (IOException e) {
-                    log("connect/send attempt " + attempt + " failed: " + e.getMessage());
+                    String why = dog != null && dog.fired() ? "connect timeout after " + CONNECT_DEADLINE_MS + " ms" : e.getMessage();
+                    log("connect/send attempt " + attempt + " failed: " + why);
                     closeQuietly(sock);
                     sock = null;
                     sleep(3000);
+                } finally {
+                    if (dog != null) dog.close();
                 }
             }
             return false;

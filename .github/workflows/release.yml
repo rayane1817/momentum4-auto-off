@@ -6,7 +6,8 @@ name: Release APK
 #   - or, once this file is on the default branch, Actions tab >
 #     "Release APK" > Run workflow.
 # The tag is derived from versionName in android/gaia-test/app/build.gradle,
-# so bump that before cutting a release.
+# so bump that before cutting a release. A pushed tag must equal v<versionName>,
+# and the unit tests must pass, or nothing is published.
 
 on:
   push:
@@ -38,10 +39,19 @@ jobs:
       - name: Install SDK packages
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
 
-      - name: Build release APK
+      - name: Check the tag matches versionName
+        if: github.event_name == 'push'
+        run: |
+          ver=$(grep -oP "versionName '\K[^']+" app/build.gradle)
+          if [ "${GITHUB_REF_NAME}" != "v${ver}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match versionName ${ver} (expected v${ver})." >&2
+            exit 1
+          fi
+
+      - name: Unit tests, then build release APK
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew testReleaseUnitTest assembleRelease --no-daemon
 
       - name: Name the APK after the version
         id: ver
