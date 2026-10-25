@@ -4,7 +4,7 @@
 Extracts the rules of `Gaia.blockedReason` (Android app) and `blocked_reason`
 (windows-client/gaia_client.py), evaluates both for every command id of
 vendors 0x0495 and 0x001D, and checks:
-  - both block 0040, feature 1, 1405, 1406, 0607, 0609-06FF, Qualcomm feature 6;
+  - both block 0040, feature 1, 1403, 1405, 1406, 0607, 1500, 0609-06FF, Qualcomm feature 6;
   - the PC client is at least as strict as the app (it may block more).
 Run: python tools/blocklist_parity_test.py   (or via unittest discover)
 """
@@ -18,7 +18,7 @@ JAVA = os.path.join(ROOT, "android", "gaia-test", "app", "src", "main", "java", 
 PY = os.path.join(ROOT, "windows-client", "gaia_client.py")
 SENNHEISER, QUALCOMM = 0x0495, 0x001D
 
-REQUIRED = ([(SENNHEISER, 0x0040), (SENNHEISER, 0x1405), (SENNHEISER, 0x1406), (SENNHEISER, 0x0607)]
+REQUIRED = ([(SENNHEISER, 0x0040), (SENNHEISER, 0x1403), (SENNHEISER, 0x1405), (SENNHEISER, 0x1406), (SENNHEISER, 0x0607), (SENNHEISER, 0x1500)]
             + [(SENNHEISER, c) for c in range(0x0200, 0x0400)]
             + [(SENNHEISER, c) for c in range(0x0609, 0x0700)]
             + [(QUALCOMM, c) for c in range(0x0C00, 0x0E00)])

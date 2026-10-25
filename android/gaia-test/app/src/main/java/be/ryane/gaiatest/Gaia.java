@@ -69,6 +69,7 @@ final class Gaia {
             if (feature == 1) return "feature 1 = firmware update / DFU mode";
             if (cmd == 0x1403 || cmd == 0x1405 || cmd == 0x1406) return "deletes paired devices";
             if (cmd == 0x0607 || (cmd >= 0x0609 && cmd <= 0x06FF)) return "reset commands next to power-off";
+            if (cmd == 0x1500) return "device rename";
         }
         if (vendor == QUALCOMM && feature == 6) return "Qualcomm upgrade feature";
         return null;
