@@ -1,0 +1,48 @@
+{
+ "app": "com.sonova.chb.control",
+ "app_version": "1.6.3 (72844)",
+ "recorded": "2026-10-25, Galaxy Z Flip6 One UI 8.5, French UI",
+ "notes": [
+  "Flutter semantics are on: labels are in content-desc, stable ids in resource-id. Use adbui.py --rid.",
+  "Some content-desc values hold device names (connection management tile). Never copy dumps into git.",
+  "Never tap factoryResetTile_image, firmwareUpdateTile_image, toneAndVoicePromptTile_image, connectionManagementTile_image.",
+  "Smart Pause, auto-answer and auto power-off tiles are disabled (enabled=false) while on-head detection is off."
+ ],
+ "screens": {
+  "home (tab Mon Appareil)": {
+   "tab": "bottomNavigationMyDevice_image",
+   "noise_tile": "noiseControlTile_image",
+   "noise_adaptive": {"rid": "noiseControlAdaptiveButton", "label": "Adaptatif", "state": "selected"},
+   "noise_custom": {"rid": "noiseControlCustomButton", "label": "Personnalisé", "state": "selected"},
+   "noise_off": {"rid": "noiseControlOffButton", "label": "ARRÊT", "state": "selected"},
+   "anc_transparency_slider": {"class": "SeekBar", "label": "0 % – ANC / 100 % – Transparence", "note": "Custom only"},
+   "antiwind_switch": {"rid": "noiseControlAntiWind_image", "label": "Anti-vent", "state": "checked", "note": "Custom only"},
+   "eq_presets": "eqPresetsName_<name>; speech clarity = mySoundTile_podcastMode",
+   "bass_boost": {"rid": "bassBoostTile_image", "label": "Amplification des basses", "state": "checked"},
+   "controls_tile": {"rid": "controlsTile_image", "label": "Commandes\\nActivé|Désactivé", "note": "scroll down"}
+  },
+  "noise detail (home > noiseControlTile_image)": {
+   "back": "noiseControlBack",
+   "antiwind_auto": {"rid": "noiseControlAntiWindAutoButton", "label": "Auto", "state": "selected"},
+   "antiwind_max": {"rid": "noiseControlAntiWindMaxButton", "label": "Max", "state": "selected",
+                    "note": "T16: SCP showed Auto selected for headset anti-wind 1 AND 2: not a headset readback"},
+   "call_transparency": {"rid": "phoneCallsTile_image", "label": "Appels téléphoniques", "state": "checked", "slider": "SeekBar Faible..Élevé"},
+   "auto_pause": {"rid": "noiseControlAutoPauseTile_image", "label": "Pause automatique", "state": "checked"}
+  },
+  "controls (home > controlsTile_image)": {
+   "back": "controlsScreenBack",
+   "touch_enable": {"rid": "controlsEnableTile_image", "label": "Commandes", "state": "checked = touch on (1607 = 00)"}
+  },
+  "settings (tab Réglages de l’appareil)": {
+   "tab": "bottomNavigationSettings_image",
+   "firmware": "firmwareUpdateTile_image (Micrologiciel, shows version) - DO NOT TAP",
+   "audio_mode_priority": "audioResolutionTile_image (Priorité du mode audio) - not in this session",
+   "codec": "codecTile_image",
+   "onhead_detection": {"rid": "onHeadDetectionTile_image", "label": "Détection au niveau de la tête", "state": "checked"},
+   "smart_pause": {"rid": "smartPauseTile_image", "state": "checked"},
+   "auto_answer": {"rid": "autoAnswerCallsTile_image", "state": "checked"},
+   "auto_power_off": {"rid": "autoPowerOffTile_image", "label": "Mise hors tension automatique\\n15 min"},
+   "comfort_calls": {"rid": "comfortCallsTile_image", "label": "Appels confortables", "state": "checked = 0815 01 (not inverted)"}
+  }
+ }
+}

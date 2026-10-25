@@ -1,0 +1,179 @@
+{
+ "name": "v08",
+ "about": "Plan Phase 4: every v0.8 control, SET -> resp -> notif -> GET readback -> restore. Frames from docs/config-spec.md (Capture 2) and docs/prior-art.md (omarchy). Validated by gaia_client.py check against tools/m4_commands.py before sending.",
+ "register": true,
+ "steps": [
+  {"id": "1", "label": "noise Off",
+   "save": {"anc": ["1A05"], "mode": ["1A01"], "lvl": ["1A03"]},
+   "actions": [
+    {"note": "pre: Adaptive, so Off is a real change"},
+    {"set": ["1A04", "01"]}, {"set": ["1A00", "03 01"]},
+    {"clear_notifs": true},
+    {"set": ["1A00", "03 00"]}, {"set": ["1A04", "00"]},
+    {"expect_notif": ["1A81", "1A85"]},
+    {"get": ["1A05"], "expect": "00"},
+    {"get": ["1A01"], "expect": "01 ?? 02 ?? 03 00"}
+   ],
+   "restore": [{"set": ["1A00", "01 {mode[1]}"]}, {"set": ["1A02", "{lvl}"]},
+               {"set": ["1A04", "{anc}"]}, {"set": ["1A00", "03 {mode[5]}"]}]},
+
+  {"id": "2", "label": "noise Adaptive",
+   "save": {"anc": ["1A05"], "mode": ["1A01"], "lvl": ["1A03"]},
+   "actions": [
+    {"note": "pre: Off"},
+    {"set": ["1A00", "03 00"]}, {"set": ["1A04", "00"]},
+    {"clear_notifs": true},
+    {"set": ["1A04", "01"]}, {"set": ["1A00", "03 01"]},
+    {"expect_notif": ["1A81", "1A85"]},
+    {"get": ["1A05"], "expect": "01"},
+    {"get": ["1A01"], "expect": "01 ?? 02 ?? 03 01"}
+   ],
+   "restore": [{"set": ["1A00", "01 {mode[1]}"]}, {"set": ["1A02", "{lvl}"]},
+               {"set": ["1A04", "{anc}"]}, {"set": ["1A00", "03 {mode[5]}"]}]},
+
+  {"id": "3", "label": "noise Custom + level 0/50/100",
+   "save": {"anc": ["1A05"], "mode": ["1A01"], "lvl": ["1A03"]},
+   "actions": [
+    {"set": ["1A00", "03 00"]}, {"set": ["1A04", "01"]},
+    {"get": ["1A05"], "expect": "01"},
+    {"get": ["1A01"], "expect": "01 ?? 02 ?? 03 00"},
+    {"clear_notifs": true},
+    {"set": ["1A02", "00"]}, {"get": ["1A03"], "expect": "00"},
+    {"set": ["1A02", "32"]}, {"get": ["1A03"], "expect": "32"},
+    {"set": ["1A02", "64"]}, {"get": ["1A03"], "expect": "64"},
+    {"expect_notif": ["1A83"]}
+   ],
+   "restore": [{"set": ["1A00", "01 {mode[1]}"]}, {"set": ["1A02", "{lvl}"]},
+               {"set": ["1A04", "{anc}"]}, {"set": ["1A00", "03 {mode[5]}"]}]},
+
+  {"id": "4", "label": "anti-wind 0/1/2 (2-byte form, in Custom)",
+   "save": {"anc": ["1A05"], "mode": ["1A01"], "lvl": ["1A03"]},
+   "actions": [
+    {"set": ["1A00", "03 00"]}, {"set": ["1A04", "01"]},
+    {"set": ["1A00", "01 00"]}, {"get": ["1A01"], "expect": "01 00 02 ?? 03 ??"},
+    {"clear_notifs": true},
+    {"set": ["1A00", "01 01"]}, {"get": ["1A01"], "expect": "01 01 02 ?? 03 ??"},
+    {"expect_notif": ["1A81"]},
+    {"set": ["1A00", "01 02"]}, {"get": ["1A01"], "expect": "01 02 02 ?? 03 ??"},
+    {"set": ["1A00", "01 00"]}, {"get": ["1A01"], "expect": "01 00 02 ?? 03 ??"}
+   ],
+   "restore": [{"set": ["1A00", "01 {mode[1]}"]}, {"set": ["1A02", "{lvl}"]},
+               {"set": ["1A04", "{anc}"]}, {"set": ["1A00", "03 {mode[5]}"]}]},
+
+  {"id": "5", "label": "1A00 6-byte form (omarchy) no-op, then anti-wind 0->1",
+   "save": {"anc": ["1A05"], "mode": ["1A01"], "lvl": ["1A03"]},
+   "actions": [
+    {"set": ["1A00", "03 00"]}, {"set": ["1A04", "01"]}, {"set": ["1A00", "01 00"]},
+    {"get": ["1A01"], "expect": "01 00 02 ?? 03 00"},
+    {"note": "6-byte no-op with current values (error 05/83 = only the 2-byte form works)"},
+    {"set": ["1A00", "01 00 02 {mode[3]} 03 00"], "accept_errors": ["05", "83"]},
+    {"get": ["1A01"], "expect": "01 00 02 ?? 03 00"},
+    {"set": ["1A00", "01 01 02 {mode[3]} 03 00"], "accept_errors": ["05", "83"]},
+    {"get": ["1A01"]}
+   ],
+   "restore": [{"set": ["1A00", "01 {mode[1]}"]}, {"set": ["1A02", "{lvl}"]},
+               {"set": ["1A04", "{anc}"]}, {"set": ["1A00", "03 {mode[5]}"]}]},
+
+  {"id": "6", "label": "EQ band 0 = +2.0 dB",
+   "save": {"eq0": ["1002", "00"]},
+   "actions": [
+    {"set": ["1001", "00 00"]},
+    {"clear_notifs": true},
+    {"set": ["1001", "00 14"]},
+    {"expect_notif": ["1082"]},
+    {"get": ["1002", "00"], "expect": "14"}
+   ],
+   "restore": [{"set": ["1001", "00 {eq0}"]}]},
+
+  {"id": "7", "label": "EQ all-gains read 1003 [00] (omarchy; empty payload = error 05, T15)",
+   "save": {"e0": ["1002", "00"], "e1": ["1002", "01"], "e2": ["1002", "02"], "e3": ["1002", "03"], "e4": ["1002", "04"]},
+   "actions": [
+    {"get": ["1003", "00"], "expect": "{e0} {e1} {e2} {e3} {e4}"}
+   ]},
+
+  {"id": "8", "label": "bass boost toggle",
+   "save": {"bass": ["1009"]},
+   "actions": [
+    {"clear_notifs": true},
+    {"set": ["1008", "{bass^1}"]},
+    {"get": ["1009"], "expect": "{bass^1}"},
+    {"expect_notif": ["1089"], "soft": true}
+   ],
+   "restore": [{"set": ["1008", "{bass}"]}]},
+
+  {"id": "9", "label": "speech clarity on",
+   "save": {"sc": ["0804"]},
+   "actions": [
+    {"clear_notifs": true},
+    {"set": ["0803", "00 02"]},
+    {"get": ["0804"], "expect": "00 02"},
+    {"expect_notif": ["0884"], "soft": true}
+   ],
+   "restore": [{"set": ["0803", "{sc}"], "fallback": ["0803", "00 01"]}]},
+
+  {"id": "10", "label": "on-head detection toggle",
+   "save": {"oh": ["0401"]},
+   "actions": [
+    {"set": ["0400", "{oh^1}"]},
+    {"get": ["0401"], "expect": "{oh^1}"}
+   ],
+   "restore": [{"set": ["0400", "{oh}"]}]},
+
+  {"id": "11", "label": "Hi-Res toggle + 1407 pending flag",
+   "save": {"hr": ["0406"]},
+   "actions": [
+    {"get": ["1407"], "optional": true},
+    {"set": ["0405", "{hr^1}"]},
+    {"get": ["0406"], "expect": "{hr^1}"},
+    {"get": ["1407"], "optional": true}
+   ],
+   "restore": [{"set": ["0405", "{hr}"]}, {"get": ["1407"], "optional": true}]},
+
+  {"id": "12", "label": "call transparency 0 and 4",
+   "save": {"ct": ["0806"]},
+   "actions": [
+    {"set": ["0805", "00"]}, {"get": ["0806"], "expect": "00"},
+    {"clear_notifs": true},
+    {"set": ["0805", "04"]}, {"get": ["0806"], "expect": "04"},
+    {"expect_notif": ["0886"], "soft": true, "note_fw3383": "no notif on 3.38.3 (T15)"}
+   ],
+   "restore": [{"set": ["0805", "{ct}"]}]},
+
+  {"id": "13a", "label": "smart pause toggle",
+   "save": {"v": ["080D"]},
+   "actions": [{"clear_notifs": true}, {"set": ["080C", "{v^1}"]}, {"get": ["080D"], "expect": "{v^1}"},
+               {"expect_notif": ["088D"], "soft": true}],
+   "restore": [{"set": ["080C", "{v}"]}]},
+
+  {"id": "13b", "label": "auto-answer toggle",
+   "save": {"v": ["080B"]},
+   "actions": [{"clear_notifs": true}, {"set": ["080A", "{v^1}"]}, {"get": ["080B"], "expect": "{v^1}"},
+               {"expect_notif": ["088B"], "soft": true}],
+   "restore": [{"set": ["080A", "{v}"]}]},
+
+  {"id": "13c", "label": "low latency toggle",
+   "save": {"v": ["0818"]},
+   "actions": [{"clear_notifs": true}, {"set": ["0817", "{v^1}"]}, {"get": ["0818"], "expect": "{v^1}"},
+               {"expect_notif": ["0898"], "soft": true}],
+   "restore": [{"set": ["0817", "{v}"]}]},
+
+  {"id": "14", "label": "comfort call toggle (0814, claimed)",
+   "save": {"cc": ["0815"]},
+   "actions": [
+    {"clear_notifs": true},
+    {"set": ["0814", "{cc^1}"]},
+    {"get": ["0815"], "expect": "{cc^1}"},
+    {"expect_notif": ["0895"], "soft": true, "note_fw3383": "no notif on 3.38.3 (T15)"}
+   ],
+   "restore": [{"set": ["0814", "{cc}"]}]},
+
+  {"id": "15", "label": "touch controls off (1606 [01], inverted, claimed)",
+   "save": {"tc": ["1607"]},
+   "actions": [
+    {"set": ["1606", "01"]},
+    {"get": ["1607"], "expect": "01"},
+    {"expect_notif": ["1687"], "soft": true}
+   ],
+   "restore": [{"set": ["1606", "{tc}"]}]}
+ ]
+}

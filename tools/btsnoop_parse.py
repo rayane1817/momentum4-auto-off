@@ -40,6 +40,7 @@ class State:
         self.rfcomm = []            # (t, dir, addr, dlci, payload)
         self.att = []
         self.events = []
+        self.unknown = []           # (t, dir, addr, handle, cid, payload): dynamic CIDs whose setup wasn't captured
 
 
 def h(b):
@@ -75,6 +76,9 @@ def handle_l2cap(st, t, sent, handle, pkt):
         st.att.append((t, d, addr, payload))
         return
     psm = st.chan.get((handle, cid))
+    if psm is None and cid >= 0x40:
+        st.unknown.append((t, d, addr, handle, cid, bytes(payload)))
+        return
     if psm == 0x0003:  # RFCOMM
         if len(payload) < 3:
             return

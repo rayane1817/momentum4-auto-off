@@ -39,15 +39,15 @@ None of these does a phone-side idle guard + `0605` true power-off. That part is
 
 | Cmd | Meaning (per omarchy) | Status |
 |---|---|---|
-| `1003` | Get all EQ gains in one call | [claimed] |
+| `1003` | Get all EQ gains in one call | **T15: error 05 with empty payload on 3.38.3** |
 | `100B` | EQ centre frequencies (90, 325, 1500, 6500, 6500 Hz) | [claimed] |
 | `100D` | EQ Q values | [claimed] |
 | `100F` | EQ filter type (14 on fw 3.x) | [claimed] |
 | `1011`, `1013` | EQ related, partly unknown | [claimed] |
-| `1607` get / `1606` set | Touch controls, **inverted**: 0 = enabled, 1 = disabled | [claimed] easy win for our app |
-| `0814/0815` | Comfort call set/get (not inverted) | [claimed] fills our "comfort call write not captured" gap |
+| `1607` get / `1606` set | Touch controls, **inverted**: 0 = enabled, 1 = disabled | **confirmed T15-T17** (SCP sends it, notif `1687`) |
+| `0814/0815` | Comfort call set/get (not inverted) | **confirmed T15-T17** (no notification) |
 | `1401 [idx]` | Paired device name by index | [claimed] read-only, safe |
-| `1407` | "Audio mode change pending" restart flag | [claimed] relevant for Hi-Res reboot question |
+| `1407` | "Audio mode change pending" restart flag | GET answers `[01]` on 3.38.3, also after a power cycle (T15, T21): not a restart-pending flag here |
 | `1409`, `140B` | Unknown | [claimed] |
 | Bass boost `1008` | Rejected on fw 2.x | [claimed] |
 
@@ -55,10 +55,10 @@ None of these does a phone-side idle guard + `0605` true power-off. That part is
 
 | Topic | Ours (Capture 2) | omarchy | Who is likely right |
 |---|---|---|---|
-| `1A00` noise-mode write | Official app sends 2 bytes `1A00 [mode, state]` | Says a set needs the full 6-byte table; partial writes rejected | Ours shows the official app's actual bytes. Maybe both work, or firmware differs. Test both. [unverified] |
-| Anti-wind values | 1 = Auto, 2 = Max | 1 = Max, 2 = Auto | Ours: session-start `1A81` had anti-wind = 2 while the app showed Max. Retest with one toggle. [unverified] |
+| `1A00` noise-mode write | Official app sends 2 bytes `1A00 [mode, state]` | Says a set needs the full 6-byte table; partial writes rejected | **Resolved T15 (fw 3.38.3): both forms accepted.** Keep the 2-byte form (what SCP sends). |
+| Anti-wind values | (Capture 2 note) 1 = Auto, 2 = Max | 1 = Max, 2 = Auto | **Resolved T17: omarchy right, 1 = Max, 2 = Auto** (marked capture, twice). Our v0.8 app has the labels swapped. |
 | ANC set/get ids | `1A04` set, `1A05` get; `1A02` set level, `1A03` get | Lists `1A05` as set, `1A03` as level set | Capture confirms ours; also T13 accepted our ids. Ours. |
-| Forget device | Official app sent `1405` on disconnect/delete | `1403` forgets a device | Both stay **blocked** in our app regardless. Do not test. |
+| Forget device | Official app sent `1405` on disconnect/delete | `1403` forgets a device | **T19: SCP's disconnect sends `1403 [idx]` and keeps the pairing** (plain disconnect). `1405` meaning still unknown. Both stay **blocked**. |
 | `0801`, `0805`, `0817` | Voice prompt mode, call transparency 0-4, low latency | Blocklisted as "unknown actions" | Ours from capture. They were cautious, not contradicting. |
 
 ### Danger list (important, next to our `0605`)

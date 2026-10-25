@@ -15,7 +15,7 @@ Step 1 of the roundtable plan. Goal: fill gaps in our M4 command map without new
 |---|---|---|---|
 | **Comfort call** | SET `0814 [0/1]`, GET `0815` | omarchy (set, readback, app watch), Oein | high |
 | **Touch controls** | SET `1606 [x]`, GET `1607`. **Inverted: 0 = enabled, 1 = disabled** | omarchy | high |
-| **Restart pending** | GET `1407`: `01` right after a Hi-Res change, `00` after the headset restarted (Hi-Res stays on). GET only; write to `1406` rejected | omarchy | high, local session confirms |
+| **Restart pending** | GET `1407`: `01` right after a Hi-Res change, `00` after the headset restarted (Hi-Res stays on). GET only; write to `1406` rejected | omarchy | **not confirmed (T15, T21)**: on Ryane's M4 it read `01` before any change and stayed `01` after a restart |
 | **EQ, all bands at once** | GET `1003 [00]` returns all 5 gains (empty payload = error) | omarchy | high |
 | **EQ config** | GET `1000` returns `[bands, minGain, maxGain, ...]` (dB x10) | Oein (HDB 630 / ACCENTUM) | medium on M4 |
 | **Charging** | notification `0682 [01/00]` cable in/out. No getter | omarchy | high |
@@ -30,7 +30,7 @@ Step 1 of the roundtable plan. Goal: fill gaps in our M4 command map without new
 ## Safety: new and confirmed traps
 | Command | What happens | Status |
 |---|---|---|
-| **`1403 [index]`** | **Deletes that paired device** (omarchy lost the phone's pairing this way) | **Added to both blocklists in this change** |
+| **`1403 [index]`** | **Deletes that paired device** (omarchy lost the phone's pairing this way). T19: SCP's disconnect sends `1403 [idx]` on Ryane's M4 and the pairing survived | **Blocked in both clients** (kept blocked) |
 | `1405`, `1406` | Delete entry / pairing (old app names) | already blocked |
 | `0607`, `0613`, `0685` (and the `0609`-`06FF` group) | Link reset, headset offline | already blocked |
 | `0801`, `0805`, `0817` with a device index | omarchy blocklisted them on the "indexed payload, empty OK" signature, effect unknown | **Not blocked.** SCP itself sends `0801 [02]` (voice prompts), `0805 [level]` (call transparency) and `0817 [0/1]` (low latency), and T13 used `0817`. Use only those exact forms. |
@@ -48,7 +48,7 @@ Step 1 of the roundtable plan. Goal: fill gaps in our M4 command map without new
 ## Conflicts to settle on hardware (local session, Phase 4/5)
 | Item | Ours (capture 2) | omarchy | Note |
 |---|---|---|---|
-| Anti-wind values in `1A00 [01, x]` | 1 = Auto, 2 = Max | 1 = Max, 2 = Auto (timmo001 ships the same) | Session-start `1A81` had anti-wind = 2 while SCP showed Max, which supports ours. Phase 5 (SCP label oracle) settles it. |
+| Anti-wind values in `1A00 [01, x]` | 1 = Auto, 2 = Max | 1 = Max, 2 = Auto (timmo001 ships the same) | **Settled T17: omarchy right, 1 = Max, 2 = Auto** (marked capture of SCP taps). SCP's highlight is not a readback (T16). |
 | `1A00` write length | SCP sends 2 bytes `[mode, state]` | "no partial writes", full 6-byte table | **Settled for 2 bytes**: capture 2 shows the headset applying them (see above). |
 | EQ band labels | SCP UI 63 / 250 / 1k / 4k / 8k Hz | `100B` centres 90 / 325 / 1500 / 6500 / 6500 Hz | Labels vs real filter centres. Cosmetic. Keep the SCP labels. |
 

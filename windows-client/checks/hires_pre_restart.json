@@ -1,0 +1,4 @@
+{"name": "hires_pre_restart", "about": "Phase 9/10: set Hi-Res on before the guard power-off, to check it holds across the restart. Restored in Phase 10.",
+ "register": false,
+ "steps": [{"id": "H", "label": "Hi-Res on + read 1407",
+  "actions": [{"get": ["1407"], "optional": true}, {"set": ["0405", "00"]}, {"get": ["0406"], "expect": "00"}, {"get": ["1407"], "optional": true}]}]}

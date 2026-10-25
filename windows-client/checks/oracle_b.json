@@ -1,0 +1,9 @@
+{"name": "oracle_b", "about": "Phase 5 visit B: Custom + anti-wind 2 + comfort call 0 + touch on (1606 [00]). No restore here.",
+ "register": false,
+ "steps": [
+  {"id": "B", "label": "Custom, anti-wind 2, comfort 0, touch on",
+   "actions": [
+    {"set": ["1A00", "03 00"]}, {"set": ["1A04", "01"]}, {"set": ["1A00", "01 02"]},
+    {"get": ["1A01"], "expect": "01 02 02 ?? 03 00"},
+    {"set": ["0814", "00"]}, {"get": ["0815"], "expect": "00"},
+    {"set": ["1606", "00"]}, {"get": ["1607"], "expect": "00"}]}]}
