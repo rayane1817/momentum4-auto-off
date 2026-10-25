@@ -2,6 +2,11 @@
 
 Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control channel (RFCOMM, UUID `a2129ff3-081b-4c45-8afe-469d9c4842ec`) and sends single commands. No internet permission, no libraries, Bluetooth only.
 
+## v0.12.1: audit fixes
+- The auto power-off guard now gives each connect attempt 8 s at most (the socket is closed if the headphones don't answer), so a failed power-off ends in about 33 s instead of hanging. Log line on timeout: "connect timeout after 8000 ms".
+- Releases run the unit tests first, and a pushed tag must match the app version.
+- No change to the app screens or to the commands it sends.
+
 ## v0.12.0: design v3 "Copper on black" (docs/design-spec-v3.md)
 - New layout: a Home page for daily use (status + Connect, battery in dot numerals, noise control, auto power-off), plus tiles that open Sound, Listening and Device pages. Back returns to Home.
 - Dark mode is true black (OLED); light mode is neutral grey. Copper stays the only accent.
@@ -42,7 +47,7 @@ Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control cha
 - Restyle only: the app sends exactly the same commands as v0.10.1. Not yet checked on the phone: `docs/local-test-v0.10.5.md`.
 
 ## Install (Samsung)
-1. On the phone, open this repo on GitHub, go to `android/gaia-test/release/` and download the latest `m4-gaia-test-*.apk` (currently 0.10.1), or grab it from the Releases page.
+1. On the phone, open this repo on GitHub, go to `android/gaia-test/release/` and download the newest `m4-gaia-test-*.apk`, or grab it from the Releases page (always the latest build).
 2. Open it. Samsung asks to allow installs from that app (Chrome / My Files): allow once.
 3. Google Play Protect may warn about an unknown app: "Install anyway". It's our own debug-signed build.
 
@@ -73,6 +78,7 @@ Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control cha
 - **"Restart needed" hint removed**: `1407` reads `01` all the time on 3.38.3, so it is not a restart flag (T15, T21).
 - Guard button and status now follow the service (they were one step behind after start/stop and autostart).
 - **Fixed signing key** (`keystore/m4-shared.jks`, public on purpose): from 0.9.1 on, every release installs over the previous one. **Uninstall the old app once** before installing 0.9.1, because older builds were signed with throwaway keys.
+  - Trust model: because the key is public, the signature only keeps updates installable; it does not prove who built the APK. Download only from this repo's Releases page or `release/` folder and compare the SHA-256 with `release/SHA256SUMS`.
 - Backup off (`allowBackup="false"`), so a reinstall no longer restores "autostart" and starts a guard unasked.
 - No "Bluetooth is off" message while Bluetooth is still turning on.
 
