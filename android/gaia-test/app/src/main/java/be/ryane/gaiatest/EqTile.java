@@ -11,7 +11,7 @@ public class EqTile extends TileService {
     @Override public void onClick() {
         Tile t = getQsTile();
         if (t != null) { t.setState(Tile.STATE_UNAVAILABLE); t.updateTile(); }
-        Widgets.stepEq(this, 1, this::draw);
+        Widgets.stepEq(this, 1, Remote.TILE_ATTEMPTS, this::draw);
     }
 
     private void draw() {

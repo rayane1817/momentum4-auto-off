@@ -18,12 +18,27 @@ import java.util.List;
  * One-shot sends for widgets and Quick Settings tiles: if the app already holds the GAIA link,
  * send through it; otherwise connect, send, wait briefly, disconnect. Nothing stays connected,
  * so the headset stays free for the app, the guard and Smart Control.
+ *
+ * Each connect is bounded by a watchdog: a widget click is a foreground broadcast that Android
+ * kills as an ANR after 10 s, and an unbounded connect() to a switched-off headset took longer.
  */
 final class Remote {
     interface Done { void done(boolean ok, String msg); }
 
     static final int NOISE_ADAPTIVE = 0, NOISE_CUSTOM = 1, NOISE_OFF = 2;
     static final String[] NOISE_NAMES = {"Adaptive", "Custom", "Off"};
+
+    static final long CONNECT_TIMEOUT_MS = 4500;   // a switched-on M4 answers in 1.0 to 2.2 s (T28)
+    static final long RETRY_GAP_MS = 800, FRAME_GAP_MS = 60, SETTLE_MS = 400;
+    static final int WIDGET_ATTEMPTS = 1, TILE_ATTEMPTS = 2;
+    /** Widget receivers finish by then at the latest, well inside the 10 s broadcast limit. */
+    static final long WIDGET_DEADLINE_MS = 7000;
+    static final String BUSY_OR_OFF = "Headphones busy or off (close Smart Control, check they are on)";
+
+    /** Longest a one-shot send can take with the headset not answering, or answering at the last moment. */
+    static long worstCaseMs(int attempts, int frames) {
+        return attempts * CONNECT_TIMEOUT_MS + (attempts - 1) * RETRY_GAP_MS + frames * FRAME_GAP_MS + SETTLE_MS;
+    }
 
     /** Same frames and order as Smart Control Plus (docs/config-spec.md, capture 2). */
     static List<byte[]> noiseFrames(int mode) {
@@ -34,7 +49,7 @@ final class Remote {
         return f;
     }
 
-    static void send(Context ctx, List<byte[]> frames, Done done) {
+    static void send(Context ctx, List<byte[]> frames, int attempts, Done done) {
         Context app = ctx.getApplicationContext();
         Handler main = new Handler(Looper.getMainLooper());
         for (byte[] fr : frames) {
@@ -48,13 +63,13 @@ final class Remote {
         }
         new Thread(() -> {
             String addr = app.getSharedPreferences("m4", Context.MODE_PRIVATE).getString("dev", "");
-            String result = oneShot(app, addr, frames);
+            String result = oneShot(app, addr, frames, attempts);
             main.post(() -> done.done(result == null, result == null ? "sent" : result));
         }, "m4-remote").start();
     }
 
     @SuppressWarnings("MissingPermission")
-    private static String oneShot(Context app, String addr, List<byte[]> frames) {
+    private static String oneShot(Context app, String addr, List<byte[]> frames, int attempts) {
         if (addr.isEmpty()) return "Open the app once and pick the headphones";
         BluetoothSocket sock = null;
         try {
@@ -62,26 +77,32 @@ final class Remote {
             if (adapter == null || !adapter.isEnabled()) return "Bluetooth is off";
             BluetoothDevice device = adapter.getRemoteDevice(addr);
             IOException last = null;
-            for (int attempt = 1; attempt <= 2; attempt++) {
+            for (int attempt = 1; attempt <= attempts; attempt++) {
+                Watchdog dog = null;
                 try {
                     sock = device.createRfcommSocketToServiceRecord(Gaia.SERVICE_UUID);
+                    dog = Watchdog.closeAfter(sock, CONNECT_TIMEOUT_MS);
                     sock.connect();
+                    dog.close();
+                    if (dog.fired()) throw new IOException("connect timeout");
                     OutputStream out = sock.getOutputStream();
                     for (byte[] fr : frames) {
                         out.write(fr); out.flush();
                         Log.i("M4REMOTE", "-> " + Gaia.hex(fr));
-                        Thread.sleep(60);
+                        Thread.sleep(FRAME_GAP_MS);
                     }
-                    Thread.sleep(400);           // let the headset apply before the link closes
+                    Thread.sleep(SETTLE_MS);     // let the headset apply before the link closes
                     return null;
                 } catch (IOException e) {
-                    last = e;
+                    last = dog != null && dog.fired() ? new IOException("connect timeout after " + CONNECT_TIMEOUT_MS + " ms") : e;
                     close(sock); sock = null;
-                    Thread.sleep(800);
+                    if (attempt < attempts) Thread.sleep(RETRY_GAP_MS);
+                } finally {
+                    if (dog != null) dog.close();
                 }
             }
             Log.i("M4REMOTE", "failed: " + last);
-            return "Headphones busy or off (close Smart Control, check they are on)";
+            return BUSY_OR_OFF;
         } catch (SecurityException e) {
             return "Nearby devices permission missing: open the app";
         } catch (InterruptedException e) {
