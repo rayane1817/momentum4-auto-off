@@ -81,12 +81,12 @@ public class MainActivity extends Activity {
     /** The app instance holding the GAIA link, used by widgets/tiles to send through it. */
     static volatile MainActivity live;
     private final TextView[] eqValue = new TextView[5];
-    private final java.util.ArrayDeque<Integer> pendingBands = new java.util.ArrayDeque<>();   // 1002 GETs in flight
     private Button guardButton;
     private EditText idleMinutes, secondsField, hexField;
 
     private volatile BluetoothSocket socket;
     private volatile OutputStream out;
+    private volatile boolean destroyed;
     private boolean ancOn, adaptiveOn, applying;
     private SharedPreferences prefs;
 
@@ -400,13 +400,6 @@ public class MainActivity extends Activity {
         swSpeech = switchRow(c, "Speech clarity", null, on -> send(b2(0x0803, 0, on ? 2 : 1)));
         gate(swBass); gate(swSpeech);
         return cardWrap(c);
-    }
-
-    private void setEq(int band, int gainX10) {
-        eqGain[band] = gainX10;
-        eqSeek[band].setProgress(Math.max(0, Math.min(120, gainX10 + 60)));
-        eqCurve.setGains(eqGain);
-        markPreset();
     }
 
     /** All five bands at once, then one preset match (no half-updated curve reaches the widgets). */
@@ -930,6 +923,7 @@ public class MainActivity extends Activity {
     /** Update the UI from a reply/notification without firing writes. */
     private void onFrame(Gaia.Frame f) {
         if (f.vendor != Gaia.SENNHEISER) return;
+        if (f.type() == 3) return;      // error reply: payload[0] is an error code, not a value
         int base = f.base();
         int b0 = f.payload.length >= 1 ? f.payload[0] & 0xFF : -1;
         applying = true;
@@ -942,9 +936,8 @@ public class MainActivity extends Activity {
             case 0x1200: if (f.payload.length >= 2) setValue(vHardware, String.valueOf(Gaia.u16(f.payload, 0)));
                 else if (b0 >= 0) setValue(vHardware, String.valueOf(b0));
                 break;
-            case 0x1A05: if (b0 >= 0 && f.type() != 3) { ancOn = b0 == 1; refreshNoise(); } break;
+            case 0x1A05: if (b0 >= 0) { ancOn = b0 == 1; refreshNoise(); } break;
             case 0x1A01:                                                     // [mode,state] pairs: 1 anti-wind, 3 adaptive
-                if (f.type() == 3) break;
                 for (int i = 0; i + 1 < f.payload.length; i += 2) {
                     int mode = f.payload[i] & 0xFF, st = f.payload[i + 1] & 0xFF;
                     if (mode == 3) adaptiveOn = st == 1;
@@ -952,28 +945,19 @@ public class MainActivity extends Activity {
                 }
                 refreshNoise();
                 break;
-            case 0x1A03: if (b0 >= 0 && b0 <= 100 && f.type() != 3) transpSeek.setProgress(b0); break;
-            case 0x080D: swSmartPause.setChecked(b0 == 1); break;
-            case 0x080B: swAutoAnswer.setChecked(b0 == 1); break;
-            case 0x0818: swLowLatency.setChecked(b0 == 1); break;
-            case 0x0401: if (f.type() != 3 && b0 >= 0) swOnHead.setChecked(b0 == 1); break;
-            case 0x0406: if (f.type() != 3 && b0 >= 0) swHiRes.setChecked(b0 == 0); break;   // 0 = Hi-Res on
-            case 0x0806: if (f.type() != 3 && b0 >= 0 && b0 <= 4) callSeek.setProgress(b0); break;
-            case 0x1009: if (f.type() != 3 && b0 >= 0) swBass.setChecked(b0 == 1); break;
-            case 0x0804: if (f.type() != 3 && f.payload.length >= 2) swSpeech.setChecked(Gaia.u16(f.payload, 0) == 2); break;
-            case 0x0815: if (f.type() != 3 && b0 >= 0) swComfort.setChecked(b0 == 1); break;
-            case 0x1607: if (f.type() != 3 && b0 >= 0) swTouch.setChecked(b0 == 0); break;   // inverted
+            case 0x1A03: if (b0 >= 0 && b0 <= 100) transpSeek.setProgress(b0); break;
+            case 0x080D: if (b0 >= 0) swSmartPause.setChecked(b0 == 1); break;
+            case 0x080B: if (b0 >= 0) swAutoAnswer.setChecked(b0 == 1); break;
+            case 0x0818: if (b0 >= 0) swLowLatency.setChecked(b0 == 1); break;
+            case 0x0401: if (b0 >= 0) swOnHead.setChecked(b0 == 1); break;
+            case 0x0406: if (b0 >= 0) swHiRes.setChecked(b0 == 0); break;   // 0 = Hi-Res on
+            case 0x0806: if (b0 >= 0 && b0 <= 4) callSeek.setProgress(b0); break;
+            case 0x1009: if (b0 >= 0) swBass.setChecked(b0 == 1); break;
+            case 0x0804: if (f.payload.length >= 2) swSpeech.setChecked(Gaia.u16(f.payload, 0) == 2); break;
+            case 0x0815: if (b0 >= 0) swComfort.setChecked(b0 == 1); break;
+            case 0x1607: if (b0 >= 0) swTouch.setChecked(b0 == 0); break;   // inverted
             case 0x1003: if (f.type() == 2 && f.payload.length >= 5) setCurve(f.payload); break;
-            case 0x1002:                                                     // 1082 notif = all 5 bands, 1102 resp = one band
-                if (f.type() == 1 && f.payload.length >= 5) {
-                    setCurve(f.payload);
-                } else if (f.type() == 2 && f.payload.length >= 1) {
-                    Integer band = pendingBands.poll();
-                    if (band != null) setEq(band, f.payload[0]);
-                } else if (f.type() == 3) {
-                    pendingBands.poll();
-                }
-                break;
+            case 0x1002: if (f.type() == 1 && f.payload.length >= 5) setCurve(f.payload); break;   // 1082 notif = all 5 bands
         }
         applying = false;
     }
@@ -1071,8 +1055,9 @@ public class MainActivity extends Activity {
                 s.connect();
                 socket = s;
                 out = s.getOutputStream();
+                if (destroyed) { closeQuietly(); return; }   // rotated or closed while connecting: don't keep the link
                 runOnUiThread(() -> { setConnected(true); registerNotifications(); readAllConfig(); });
-                readLoop(s.getInputStream());
+                readLoop(s, s.getInputStream());
             } catch (IOException e) {
                 append("Connect failed: " + e.getMessage()
                         + "\nTry: force stop Smart Control Plus; make sure the MOMENTUM 4 is connected to this device;"
@@ -1086,7 +1071,7 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    private void readLoop(InputStream in) {
+    private void readLoop(BluetoothSocket s, InputStream in) {
         Gaia.Parser parser = new Gaia.Parser();
         byte[] buf = new byte[1024];
         try {
@@ -1100,6 +1085,8 @@ public class MainActivity extends Activity {
         } catch (IOException ignored) {
         }
         append("Disconnected.");
+        BluetoothSocket cur = socket;
+        if (cur != null && cur != s) return;                 // a newer link is live: leave it alone
         closeQuietly();
         runOnUiThread(() -> {
             setConnected(false);
@@ -1108,7 +1095,8 @@ public class MainActivity extends Activity {
     }
 
     private void setConnected(boolean on) {
-        live = on ? this : null;
+        if (on) live = this;
+        else if (live == this) live = null;
         if (!on) eqSync.disconnected();
         connecting = false;
         if (on) setStatus(1, "Connected");
@@ -1269,5 +1257,5 @@ public class MainActivity extends Activity {
     private int dp(float v) { return Math.round(v * getResources().getDisplayMetrics().density); }
 
     @Override
-    protected void onDestroy() { if (live == this) live = null; closeQuietly(); sender.shutdown(); super.onDestroy(); }
+    protected void onDestroy() { destroyed = true; if (live == this) live = null; closeQuietly(); sender.shutdown(); super.onDestroy(); }
 }

@@ -55,6 +55,10 @@ public class AutoOffService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (running) return START_STICKY;
+        if (intent == null) {          // sticky restart after the process was killed: no address, don't crash
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         String addr = intent.getStringExtra(EXTRA_ADDR);
         long timeout = intent.getLongExtra(EXTRA_TIMEOUT_MS, 15 * 60_000L);
         Notification n = buildNotification("Watching for idle...");
@@ -109,7 +113,7 @@ public class AutoOffService extends Service {
         } catch (Throwable t) {
             log("guard crashed: " + t);
         } finally {
-            running = false;
+            if (!stop) running = false;   // when stopped, onDestroy already cleared it; a newer guard may be running now
             stopForeground(true);
             stopSelf();
             log("guard stopped");
