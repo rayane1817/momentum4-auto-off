@@ -47,7 +47,7 @@ Show me the START checklist from docs/local-test-v0.10.md now, then begin.
 
 ### E. v0.10 widgets and tiles
 Use `adb shell input keyevent KEYCODE_HOME` + `uiautomator dump` to find `w_adaptive`, `w_custom`, `w_off`, `w_eq_prev`, `w_eq_next`; tiles via `adb shell cmd statusbar expand-settings` and the tile labels "Noise: ..." / "EQ: ...". Watch `adb logcat -s M4REMOTE M4GAIA`.
-1. **App closed** (force-stopped): tap widget Adaptive, Custom, Off. PASS per tap: `M4REMOTE` shows the frames (Adaptive `1A04 01` + `1A00 03 01`; Custom `1A00 03 00` + `1A04 01`; Off `1A00 03 00` + `1A04 00`), the link closes after, the selected chip highlights, PC snapshot shows the mode. Time from tap to applied: record it.
+1. **App closed** (process killed: open the app once, Home, `adb shell am kill be.ryane.gaiatest`; NOT `am force-stop`, which on Android 16 masks the app's widgets as a grey placeholder until the app is opened again, T28): tap widget Adaptive, Custom, Off. PASS per tap: `M4REMOTE` shows the frames (Adaptive `1A04 01` + `1A00 03 01`; Custom `1A00 03 00` + `1A04 01`; Off `1A00 03 00` + `1A04 00`), the link closes after, the selected chip highlights, PC snapshot shows the mode. Time from tap to applied: record it.
 2. **EQ widget:** next/prev cycle through the 8 presets plus custom ones; the name updates; PC readback matches.
 3. **Tiles:** noise tile cycles Adaptive > Custom > Off; EQ tile steps presets; labels update.
 4. **App open and connected:** tap widget buttons. PASS: no second connection, frames go through the app (`M4GAIA` shows them), the app UI follows within 1 s (notifications).

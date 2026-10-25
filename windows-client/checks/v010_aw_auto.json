@@ -1,0 +1,4 @@
+{"name": "v010_aw_auto", "about": "v0.10 run B1: PC sets anti-wind wire 2 (= Auto, T17) in Custom mode; the app must then show Auto.",
+ "register": false,
+ "steps": [{"id": "AW2", "label": "Custom + anti-wind [01 02]",
+  "actions": [{"set": ["1A00", "01 02"]}, {"get": ["1A01"], "expect": "01 02 02 ?? 03 00"}]}]}

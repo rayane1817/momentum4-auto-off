@@ -1,0 +1,5 @@
+{"name": "v010_eq_seed", "about": "v0.10 run C4/D1: PC sets the test curve +1.0/-0.5/0/+0.5/+2.0 dB; the app must show it after connect (1003 [00]). Restore = Neutral via the app.",
+ "register": false,
+ "steps": [{"id": "EQ", "label": "EQ test curve",
+  "actions": [{"set": ["1001", "00 0A"]}, {"set": ["1001", "01 FB"]}, {"set": ["1001", "02 00"]}, {"set": ["1001", "03 05"]}, {"set": ["1001", "04 14"]},
+              {"get": ["1003", "00"], "expect": "0A FB 00 05 14"}]}]}
