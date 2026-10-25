@@ -38,21 +38,20 @@ Scopes (`--features`): `3` power/battery (default, start here), `0q` Qualcomm co
 When it finds a candidate, check the headphones: red LED blinking 3x and staying off means it worked. Paste the log here either way.
 
 ## Safety
-The tool refuses to send, whatever you type: factory reset (`0495:0040`), firmware-update / DFU mode (`0495` feature 1), deleting paired devices (`0495:1405/1406`), and Qualcomm's upgrade feature (`001D` feature 6). The default sweep stays inside features identified as power/system; it never sweeps all features, and it never sweeps the unknown features 16/19 (those need careful manual identification first, see `../docs/protocol.md`).
+The tool refuses to send, whatever you type: factory reset (`0495:0040`), firmware-update / DFU mode (`0495` feature 1), deleting or disconnecting paired devices (`0495:1403/1405/1406`), the reset commands next to power-off (`0495:0607`, `0609-06FF`), device rename (`0495:1500`), and Qualcomm's upgrade feature (`001D` feature 6). `tools/blocklist_parity_test.py` checks that the app blocks the same. The default sweep stays inside features identified as power/system; it never sweeps all features, and it never sweeps the unknown features 16/19 (those need careful manual identification first, see `../docs/protocol.md`).
 
 Worst realistic outcome of a sweep: a "ship/transport mode" that needs a USB charger plug to wake. Annoying, reversible. Stop and report if the headset goes unresponsive without the 60 s reconnect test passing.
 
 ## Options
 ```
---addr AA:BB:CC:DD:EE:FF   headset MAC (default 80:C3:BA:4D:6A:24, from the capture)
---channel N                force an RFCOMM channel, skip SDP and the channel sweep
+--addr AA:BB:CC:DD:EE:FF   headset MAC (default: Ryane's M4, from the capture)
+--channel N                force an RFCOMM channel, skip SDP
 --log DIR                  where to write logs (default ./logs)
 ```
 
 ## How it connects
-It looks up the GAIA channel by SDP if pybluez is installed, otherwise it uses channel 15 (from the capture), and as a last resort sweeps channels 1-30. Every attempt and every frame, in and out, is timestamped in the log under `logs/`.
+It looks up the GAIA channel by SDP if pybluez is installed, otherwise it uses channel 15 (from the capture). It never tries other channels: GAIA frames on another RFCOMM service (e.g. iAP2) can switch a headset off. Every attempt and every frame, in and out, is timestamped in the log under `logs/`.
 
 ## Windows notes
 - Stock Windows Python has no `socket.AF_BLUETOOTH`, so on Windows the client opens RFCOMM through the Microsoft Bluetooth stack (WinSock `AF_BTH`) with ctypes. It connects by the GAIA service UUID and lets Windows find the channel by SDP; `--channel` is only a fallback. No packages needed (`pybluez2` does not install on Python 3.12 anyway).
-- Use `--channel 15` for sweeps, so a reconnect check never falls back to trying channels 1-30.
 - If Windows keeps auto-reconnecting the audio profile and the control channel won't open, unpair the headset from any other nearby device first.
