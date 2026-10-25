@@ -1,15 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Noise widget, design v2 (spec 4.1). Colours only from @color, so the launcher repaints it in dark mode itself. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:padding="10dp" android:background="@drawable/w_bg">
-    <TextView android:id="@+id/w_title" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:text="MOMENTUM 4 · Noise" android:textColor="#FF5F6368" android:textSize="12sp" android:paddingBottom="6dp" />
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-        <Button android:id="@+id/w_adaptive" android:layout_width="0dp" android:layout_weight="1" android:layout_height="40dp"
-            android:text="Adaptive" android:textAllCaps="false" android:textSize="13sp" android:layout_marginEnd="4dp" android:background="@drawable/w_chip_off" />
-        <Button android:id="@+id/w_custom" android:layout_width="0dp" android:layout_weight="1" android:layout_height="40dp"
-            android:text="Custom" android:textAllCaps="false" android:textSize="13sp" android:layout_marginEnd="4dp" android:background="@drawable/w_chip_off" />
-        <Button android:id="@+id/w_off" android:layout_width="0dp" android:layout_weight="1" android:layout_height="40dp"
-            android:text="Off" android:textAllCaps="false" android:textSize="13sp" android:background="@drawable/w_chip_off" />
+    android:orientation="vertical" android:gravity="center_vertical" android:padding="12dp" android:background="@drawable/w_bg">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingBottom="8dp">
+        <TextView android:id="@+id/w_title" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+            android:text="M4" android:textColor="@color/ink2" android:textSize="13sp" android:maxLines="1" android:ellipsize="end" />
+        <TextView android:id="@+id/w_note" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="as last set" android:textColor="@color/ink2" android:textSize="13sp" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:orientation="horizontal" android:padding="3dp" android:background="@drawable/w_track">
+        <FrameLayout android:id="@+id/w_adaptive" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:clickable="true" android:focusable="true" android:contentDescription="Adaptive">
+            <LinearLayout android:id="@+id/w_adaptive_on" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center" android:orientation="horizontal" android:visibility="gone">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="11sp" android:textColor="@color/pilot_on_key" android:paddingEnd="6dp" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Adaptive" android:textSize="15sp" android:fontFamily="sans-serif-medium" android:textColor="@color/on_key" />
+            </LinearLayout>
+            <TextView android:id="@+id/w_adaptive_off" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center" android:text="Adaptive" android:textSize="15sp" android:fontFamily="sans-serif-medium" android:textColor="@color/ink" />
+        </FrameLayout>
+        <FrameLayout android:id="@+id/w_custom" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:clickable="true" android:focusable="true" android:contentDescription="Custom">
+            <LinearLayout android:id="@+id/w_custom_on" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center" android:orientation="horizontal" android:visibility="gone">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="11sp" android:textColor="@color/pilot_on_key" android:paddingEnd="6dp" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Custom" android:textSize="15sp" android:fontFamily="sans-serif-medium" android:textColor="@color/on_key" />
+            </LinearLayout>
+            <TextView android:id="@+id/w_custom_off" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center" android:text="Custom" android:textSize="15sp" android:fontFamily="sans-serif-medium" android:textColor="@color/ink" />
+        </FrameLayout>
+        <FrameLayout android:id="@+id/w_off" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:clickable="true" android:focusable="true" android:contentDescription="Off">
+            <LinearLayout android:id="@+id/w_off_on" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center" android:orientation="horizontal" android:visibility="gone">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="11sp" android:textColor="@color/pilot_on_key" android:paddingEnd="6dp" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Off" android:textSize="15sp" android:fontFamily="sans-serif-medium" android:textColor="@color/on_key" />
+            </LinearLayout>
+            <TextView android:id="@+id/w_off_off" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center" android:text="Off" android:textSize="15sp" android:fontFamily="sans-serif-medium" android:textColor="@color/ink" />
+        </FrameLayout>
     </LinearLayout>
 </LinearLayout>
