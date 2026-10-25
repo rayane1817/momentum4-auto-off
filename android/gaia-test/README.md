@@ -3,7 +3,7 @@
 Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control channel (RFCOMM, UUID `a2129ff3-081b-4c45-8afe-469d9c4842ec`) and sends single commands. No internet permission, no libraries, Bluetooth only.
 
 ## Install (Samsung)
-1. On the phone, open this repo on GitHub, go to `android/gaia-test/release/` and download the latest `m4-gaia-test-*.apk` (currently 0.9), or grab it from the Releases page.
+1. On the phone, open this repo on GitHub, go to `android/gaia-test/release/` and download the latest `m4-gaia-test-*.apk` (currently 0.9.1), or grab it from the Releases page.
 2. Open it. Samsung asks to allow installs from that app (Chrome / My Files): allow once.
 3. Google Play Protect may warn about an unknown app: "Install anyway". It's our own debug-signed build.
 
@@ -12,6 +12,14 @@ Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control cha
 2. Headphones on and connected to the phone as usual.
 3. Open "M4 GAIA test", allow "Nearby devices", pick the MOMENTUM 4, tap Connect.
 4. Tap the buttons, then "Copy log" and paste the log in the chat.
+
+## v0.9.1 (fixes from the hardware session, PR #12)
+- **Anti-wind labels fixed**: on the wire 1 = Max, 2 = Auto (T17). v0.8 and v0.9 had Auto and Max swapped.
+- **"Restart needed" hint removed**: `1407` reads `01` all the time on 3.38.3, so it is not a restart flag (T15, T21).
+- Guard button and status now follow the service (they were one step behind after start/stop and autostart).
+- **Fixed signing key** (`keystore/m4-shared.jks`, public on purpose): from 0.9.1 on, every release installs over the previous one. **Uninstall the old app once** before installing 0.9.1, because older builds were signed with throwaway keys.
+- Backup off (`allowBackup="false"`), so a reinstall no longer restores "autostart" and starts a guard unasked.
+- No "Bluetooth is off" message while Bluetooth is still turning on.
 
 ## v0.9
 - **EQ presets**: Neutral, Rock, Pop, Dance, Hip-Hop, Classical, Movie, Jazz (Smart Control's values, checked against our capture). The matching preset is highlighted, like in Smart Control.
