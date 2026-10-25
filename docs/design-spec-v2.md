@@ -254,3 +254,29 @@ Header shows the hollow dot and "Not connected". Noise, Sound, Listening, Device
 - Frame diff: run the v0.10 and v0.11 builds through the same UI script, compare `M4GAIA` `->` lines; identical.
 - `versionName 0.11`, APK + `SHA256SUMS`, README, `CLAUDE.md` DONE line.
 - Screenshots light and dark: emulator in the sandbox if it boots; otherwise a checklist for the local session (`adb shell cmd uimode night yes|no`, `adb exec-out screencap -p`).
+
+## 10. Layout to-do from the hardware runs (25 Oct 2026, for the layout agent)
+
+Found on two phones: Galaxy Z Flip6 (One UI 8.5, Nova launcher) and Nokia XR20 (stock Android 14, launcher3). Evidence: CLAUDE.md T37-T41, PR #25. Screenshots stay private (m4-private), ask Ryane.
+
+### 10.1 Widget default size is too big (both phones)
+Ryane had to shrink both widgets by hand on the Samsung; on the Nokia they landed as large cards with mostly empty space.
+- Cause 1: `res/xml/widget_noise_info.xml` asks for `targetCellWidth="4" targetCellHeight="2"`; this spec (4.1) says **3 x 1**.
+- Cause 2: `widget_eq_info.xml` is 3 x 1, but `minHeight="70dp"` still rounded up to 2 rows on launcher3. `minWidth`/`minHeight` (pre-API 31 launchers) and `targetCell*` (API 31+) must agree.
+- Cause 3: both have `resizeMode="horizontal"` only and no `minResizeWidth` / `minResizeHeight`, so the height a launcher picks can't be made smaller by the user.
+- Do: noise and EQ widget default 3 x 1 (`targetCellWidth="3" targetCellHeight="1"`, `minWidth`/`minHeight` sized for 3 x 1, i.e. height under ~60 dp so one row fits), `resizeMode="horizontal|vertical"`, set `minResizeWidth`/`minResizeHeight` (e.g. 2 x 1) and `maxResizeHeight` if a 2-row version makes no sense.
+- Accept: dropped fresh on both launchers, each widget takes one row and 3 columns; it can be resized down to 2 x 1 and up, nothing clipped.
+
+### 10.2 Widget content doesn't adapt to the widget's size
+The layouts use fixed sizes (48 dp key row, 13 sp captions, `gravity="center_vertical"`), so a bigger widget only adds empty space and a smaller one may clip.
+- Do: make the key row and the EQ row fill the available height within limits (e.g. keys 40-72 dp, label text scaling with it), or provide size-specific layouts: API 31+ `RemoteViews(Map<SizeF, RemoteViews>)` / `onAppWidgetOptionsChanged` + `OPTION_APPWIDGET_MIN/MAX_HEIGHT` to pick a compact (1 row) or tall (2 rows: bigger keys, EQ shows "Preset n of N") layout.
+- Accept: at 3 x 1 nothing is clipped and the keys are at least 40 dp tall; at 4 x 2 the content grows, no large empty band.
+
+### 10.3 Other layout findings (Nokia, stock Android)
+- Values in the mono/tabular style (battery "60 %", EQ "-5.0 dB", "off", model, firmware) render in a typewriter-like fixed-width font with wide letter spacing (stock Android falls back to Droid Sans Mono). Use `sans-serif` with `fontFeatureSettings="tnum"` (tabular digits) instead of a monospace family, and drop the extra spacing; check on both phones.
+- Quick Settings tile label "EQ: Custom curve" is truncated on stock Android ("EQ: Custon"). Shorten tile labels (e.g. "EQ: Custom", preset names fit already) or put the name in the subtitle.
+- The save-preset dialog (and likely the other dialogs) uses Android's default blue accent for radio buttons and buttons, not copper. Theme the dialogs (`AlertDialog` with a theme that sets `colorAccent`/`colorPrimary` to the copper tokens), light and dark.
+
+### 10.4 One UI state rule (small, touches MainActivity)
+- Speech clarity is refused by the headset while Hi-Res is on (`0803` -> error `0x83`, T39). Show the Speech clarity switch disabled with a caption "Turn off Hi-Res 24/96 first" while the Hi-Res switch is on. Treat error `0x80` (value already set) as success, not a failure.
+
