@@ -1,6 +1,6 @@
 # Design spec v2: app, widgets, tiles (draft for Ryane's pick)
 
-Status: **direction A chosen by Ryane (25 Oct 2026), built in app v0.10.5** (not yet checked on the phone: docs/local-test-v0.10.5.md). Not in v0.10.5: fader fill from the 0 dB centre, fader ticks, the "guard fired" status line. Name stays "M4 GAIA test".
+Status: **direction A chosen by Ryane (25 Oct 2026), built in app v0.10.5, completed in v0.11.0** (centre-fill EQ faders, ticks, guard "Sent" / failed status). Not yet checked on the phone: docs/local-test-v0.11.0.md. Name stays "M4 GAIA test".
 Research behind it: `docs/design-research.md`. Mock-up (private canvas, Ryane's account): https://claude.ai/artifact/PWtctghujwp6ReAKvvwHNz Replaces the look of `docs/ux-spec.md`; the structure and every behaviour of v0.10 stay.
 
 Hard rules for Phase 3:

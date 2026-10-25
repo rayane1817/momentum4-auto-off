@@ -90,7 +90,7 @@ Presets are app-side (no preset command). Smart Control's 8 presets: see `androi
 | `1403 [index]` | Disconnect a device, pairing kept (T19). Blocked anyway | ⛔ |
 | `1405` | "Delete entry" (old app name). Smart Control sent it once in capture 2. May remove a pairing | ⛔ |
 | `1406` | Delete pairing / write rejected | ⛔ |
-| `1407` | Always reads `01` on Ryane's M4, not a restart flag (T21) | ❓ |
+| `1407` | Not a restart flag: `01` through Hi-Res toggles and a restart (T21), then `00` after a guard power-off + button (T35). Not stable, meaning unknown. Read only | ❓ |
 | `1409` (reads `02`), `140B` (6 zero bytes), `1400`, `1404` | Unknown | ❓ |
 | `1484` | Connection notification | ✅ |
 | `1500` | Rename device (blocked in the PC client) | ⛔ |

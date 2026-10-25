@@ -45,6 +45,9 @@ public class AutoOffService extends Service {
     private static final long POLL_MS = 15_000;
 
     static volatile boolean running;
+    /** For the app's guard panel only: when 0605 was last sent OK, and whether the last attempt failed. */
+    static volatile long firedAt;
+    static volatile boolean lastSendFailed;
     private static final StringBuilder LOG = new StringBuilder();
 
     private volatile boolean stop;
@@ -86,9 +89,12 @@ public class AutoOffService extends Service {
                 if (idleMs >= timeout) {
                     log("idle timeout reached, sending power-off");
                     if (sendPowerOff(addr)) {
+                        firedAt = System.currentTimeMillis();
+                        lastSendFailed = false;
                         status("Power-off sent. Headset should be off.");
                         log("power-off sent OK (0605)");
                     } else {
+                        lastSendFailed = true;
                         status("Could not reach the headset to power off. Will retry next cycle.");
                         log("power-off send FAILED; staying armed");
                         // Do not reset the clock; try again next poll so a brief

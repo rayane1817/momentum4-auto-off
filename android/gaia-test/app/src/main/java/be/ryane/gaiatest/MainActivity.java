@@ -62,7 +62,8 @@ public class MainActivity extends Activity {
     private Button connectBtn;
     private EqCurve eqCurve;
     private final List<String> presetNames = new ArrayList<>();
-    private boolean userDisconnect, connecting;
+    private boolean userDisconnect, connecting, confirmedOther;
+    private TextView guardTarget;
     private TextView vBattery, vModel, vFirmware, vHardware, guardStatus, log;
     private ScrollView logScroll;
     private Segmented noise, antiWind;
@@ -245,7 +246,23 @@ public class MainActivity extends Activity {
         BluetoothDevice d = selectedDevice();
         String n = d == null ? "M4" : (d.getName() == null ? d.getAddress() : d.getName());
         deviceName.setText(n);
-        prefs.edit().putString("devName", n).apply();
+        refreshGuardTarget();
+    }
+
+    @SuppressWarnings("MissingPermission")
+    private static String nameOf(BluetoothDevice d) { return d.getName() == null ? d.getAddress() : d.getName(); }
+
+    private static boolean isMomentum(BluetoothDevice d) { return nameOf(d).toUpperCase(Locale.ROOT).contains("MOMENTUM"); }
+
+    /** Which device the guard, widgets and tiles act on (T35: a stale saved TV caused silent failures). */
+    private void refreshGuardTarget() {
+        if (guardTarget == null) return;
+        BluetoothDevice d = selectedDevice();
+        if (d == null) { guardTarget.setText("Pick the headphones above."); guardTarget.setTextColor(T.ink2); return; }
+        boolean m4 = isMomentum(d);
+        guardTarget.setText(m4 ? "Switches off: " + nameOf(d)
+                : nameOf(d) + " is not a MOMENTUM 4. Pick the headphones above.");
+        guardTarget.setTextColor(m4 ? T.ink2 : T.danger);
     }
 
     /** Header status line: pilot dot (filled = live, hollow = not connected, faint = busy) + text. */
@@ -323,8 +340,8 @@ public class MainActivity extends Activity {
         parent.addView(cap);
         SeekBar s = new SeekBar(this);
         s.setMax(max);
-        s.setProgressTintList(ColorStateList.valueOf(T.copper));
-        s.setProgressBackgroundTintList(ColorStateList.valueOf(T.ruleStrong));
+        float density = getResources().getDisplayMetrics().density;
+        s.setProgressDrawable(new FaderTrack(T, density, max == 120, max == 4 ? 4 : max == 100 ? 4 : 0));
         GradientDrawable cap6 = rounded(T.ink, 6, T.surface, 2);
         cap6.setSize(dp(14), dp(24));
         s.setThumb(cap6);
@@ -523,8 +540,10 @@ public class MainActivity extends Activity {
         guardBig = text("Off", 28, Tok.MONO, T.ink);
         c.addView(guardBig);
         guardStatus = caption("");
-        guardStatus.setPadding(0, 0, 0, dp(12));
         c.addView(guardStatus);
+        guardTarget = caption("");
+        guardTarget.setPadding(0, dp(4), 0, dp(12));
+        c.addView(guardTarget);
 
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -1040,7 +1059,7 @@ public class MainActivity extends Activity {
         if (socket != null) { append("Already connected."); return; }
         BluetoothDevice device = selectedDevice();
         if (device == null) { toast("No device"); return; }
-        prefs.edit().putString("dev", device.getAddress()).apply();
+        prefs.edit().putString("dev", device.getAddress()).putString("devName", nameOf(device)).apply();
         append("Connecting...");
         connecting = true;
         userDisconnect = false;
@@ -1182,7 +1201,16 @@ public class MainActivity extends Activity {
         try { minutes = Integer.parseInt(idleMinutes.getText().toString().trim()); }
         catch (NumberFormatException e) { toast("Enter minutes"); return; }
         if (minutes < 1) { toast("At least 1 minute"); return; }
-        prefs.edit().putInt("minutes", minutes).putString("dev", device.getAddress()).apply();
+        if (!isMomentum(device) && !confirmedOther) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Use " + nameOf(device) + "?")
+                    .setMessage("This is not a MOMENTUM 4. The guard would try to switch off this device instead of your headphones.")
+                    .setPositiveButton("Use it anyway", (d, w) -> { confirmedOther = true; startGuard(); confirmedOther = false; })
+                    .setNegativeButton("Cancel", null)
+                    .show();
+            return;
+        }
+        prefs.edit().putInt("minutes", minutes).putString("dev", device.getAddress()).putString("devName", nameOf(device)).apply();
         if (Build.VERSION.SDK_INT >= 33
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 2);
@@ -1209,8 +1237,19 @@ public class MainActivity extends Activity {
         int min = prefs.getInt("minutes", 15);
         guardButton.setText(on ? "Stop guard" : "Start guard");
         if (on) styleOutline(guardButton); else styleFilled(guardButton);
-        guardBig.setText(on ? min + " min" : "Off");
-        guardStatus.setText(on ? "Armed. Off after " + min + " min with nothing playing and no call." : "The guard is not running.");
+        long fired = AutoOffService.firedAt;
+        boolean justFired = !on && fired > 0;
+        guardBig.setText(on ? min + " min" : justFired ? "Sent" : "Off");
+        if (on && AutoOffService.lastSendFailed) {
+            guardStatus.setText("Couldn't reach the headphones to power them off. Trying again next cycle.");
+            guardStatus.setTextColor(T.danger);
+        } else {
+            guardStatus.setTextColor(T.ink2);
+            guardStatus.setText(on ? "Armed. Off after " + min + " min with nothing playing and no call."
+                    : justFired ? "Power-off sent at " + new SimpleDateFormat("HH:mm", Locale.ROOT).format(new Date(fired)) + ". Wake them with the button."
+                    : "The guard is not running.");
+        }
+        refreshGuardTarget();
         guardDot.setText(on ? "●" : "");
     }
 

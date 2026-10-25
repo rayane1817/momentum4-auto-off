@@ -33,7 +33,7 @@ final class Remote {
     static final int WIDGET_ATTEMPTS = 1, TILE_ATTEMPTS = 2;
     /** Widget receivers finish by then at the latest, well inside the 10 s broadcast limit. */
     static final long WIDGET_DEADLINE_MS = 7000;
-    static final String BUSY_OR_OFF = "Headphones busy or off (close Smart Control, check they are on)";
+    static final String BUSY_OR_OFF = "off or out of reach";
 
     /** Longest a one-shot send can take with the headset not answering, or answering at the last moment. */
     static long worstCaseMs(int attempts, int frames) {

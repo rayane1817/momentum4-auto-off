@@ -39,7 +39,7 @@ Details: [`docs/protocol.md`](docs/protocol.md) (protocol and command map) and [
 - **Widgets and Quick Settings tiles** for noise control (Adaptive / Custom / Off) and EQ presets, plus 5 custom EQ presets of your own.
 - **Noise control and settings.** Adaptive / Custom / Off noise control with an ANC-transparency slider and anti-wind, a 5-band EQ with Smart Control's presets, bass boost and speech clarity, comfort call, touch controls, Hi-Res, on-head detection, call transparency, smart pause, auto-answer, low latency, plus a readout of battery, model and firmware.
 
-Install: on the phone, tap **[Download the APK (v0.10.5)](https://github.com/rayane1817/momentum4-auto-off/raw/main/android/gaia-test/release/m4-gaia-test-0.10.5.apk)** and allow the install. It's a self-built app, so Play Protect will warn you. SHA-256 is in [`SHA256SUMS`](android/gaia-test/release/SHA256SUMS). If the app can't connect, force-stop Smart Control Plus, because only one app can use the control channel at a time. More in the [app README](android/gaia-test/README.md).
+Install: on the phone, tap **[Download the APK (v0.11.0)](https://github.com/rayane1817/momentum4-auto-off/raw/main/android/gaia-test/release/m4-gaia-test-0.11.0.apk)** and allow the install. It's a self-built app, so Play Protect will warn you. SHA-256 is in [`SHA256SUMS`](android/gaia-test/release/SHA256SUMS). If the app can't connect, force-stop Smart Control Plus, because only one app can use the control channel at a time. More in the [app README](android/gaia-test/README.md).
 
 Known limits:
 - If you wear the headphones in silence (ANC on, no audio) longer than the timeout, the guard switches them off. Raise the timeout if that bothers you.

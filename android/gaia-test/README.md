@@ -2,6 +2,14 @@
 
 Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control channel (RFCOMM, UUID `a2129ff3-081b-4c45-8afe-469d9c4842ec`) and sends single commands. No internet permission, no libraries, Bluetooth only.
 
+## v0.11.0: design v2 + the retest findings
+- Everything in v0.10.5 (new look, dark mode) plus:
+- The guard panel says which device it will switch off, and warns in red when the selected device is not a MOMENTUM 4 (a saved TV made widgets fail silently in the retest). Start guard asks before guarding a non-MOMENTUM device.
+- Widget and tile failures say "Can't reach <device>. Are they on?", short enough for one toast.
+- EQ faders fill from 0 dB in the middle (left = cut, right = boost); ticks on the transparency and call faders.
+- After the guard fires: "Sent" and the time, or a red line if it couldn't reach the headphones.
+- Same commands as v0.10.1. Check list: `docs/local-test-v0.11.0.md`.
+
 ## v0.10.5: new look (design v2, "Copper and graphite")
 - Warm graphite and paper colours with one copper accent that only means "live on the headphones now" (status dot, selected mode, active preset, armed guard). Spec: `docs/design-spec-v2.md`, research: `docs/design-research.md`.
 - **Dark mode** follows the phone setting: app, dialogs, widgets and tiles.
