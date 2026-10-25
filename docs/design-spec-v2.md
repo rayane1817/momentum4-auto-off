@@ -257,6 +257,8 @@ Header shows the hollow dot and "Not connected". Noise, Sound, Listening, Device
 
 ## 10. Layout to-do from the hardware runs (25 Oct 2026, for the layout agent)
 
+**Built in v0.11.2** (10.1 sizes and resize, 10.2 key row fills the height instead of size-specific layouts, 10.3 tabular digits / copper dialogs / short tile label, 10.4 speech clarity rule). Not yet checked on the phones.
+
 Found on two phones: Galaxy Z Flip6 (One UI 8.5, Nova launcher) and Nokia XR20 (stock Android 14, launcher3). Evidence: CLAUDE.md T37-T41, PR #25. Screenshots stay private (m4-private), ask Ryane.
 
 ### 10.1 Widget default size is too big (both phones)

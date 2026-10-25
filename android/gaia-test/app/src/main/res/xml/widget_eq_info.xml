@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 3 x 1 by default on every launcher (min* for pre-API 31, targetCell* for 31+), resizable both ways down to 2 x 1. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:minWidth="180dp" android:minHeight="70dp" android:targetCellWidth="3" android:targetCellHeight="1"
-    android:updatePeriodMillis="0" android:resizeMode="horizontal" android:widgetCategory="home_screen"
+    android:minWidth="180dp" android:minHeight="40dp" android:targetCellWidth="3" android:targetCellHeight="1"
+    android:minResizeWidth="110dp" android:minResizeHeight="40dp"
+    android:updatePeriodMillis="0" android:resizeMode="horizontal|vertical" android:widgetCategory="home_screen"
     android:initialLayout="@layout/widget_eq" android:description="@string/w_eq_desc" />

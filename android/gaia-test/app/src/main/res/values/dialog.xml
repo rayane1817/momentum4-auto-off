@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dialogs in copper, not the system blue (Nokia run, design spec 10.3). Night variant in values-night. -->
+    <style name="AlertTheme" parent="@android:style/Theme.Material.Light.Dialog.Alert">
+        <item name="android:colorAccent">@color/copper</item>
+        <item name="android:colorPrimary">@color/copper</item>
+        <item name="android:colorBackground">@color/surface</item>
+        <item name="android:textColorPrimary">@color/ink</item>
+        <item name="android:textColorSecondary">@color/ink2</item>
+    </style>
+</resources>
