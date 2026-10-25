@@ -15,7 +15,7 @@ Capture clock note: timestamps decode ~2 h ahead of Brussels local time (e.g. 19
 - Tools: jadx 1.5.1, blutter. Blutter recovered class names, enums and the object pool, but no function bodies for this Dart version, so byte values cannot be read from the code directly.
 
 ## Transport
-- Bluetooth Classic, headset MAC 80:C3:BA:4D:6A:24.
+- Bluetooth Classic, headset MAC XX:XX:XX:XX:6A:24.
 - RFCOMM DLCI 20 (server channel 10): standard Hands-Free Profile AT commands. Not relevant.
 - RFCOMM DLCI 30 (server channel 15): GAIA control channel. Opened by the phone right after connect.
 - Find the channel through SDP, don't hard-code it. Service UUID `a2129ff3-081b-4c45-8afe-469d9c4842ec` (SDP name "GAIA").

@@ -37,3 +37,11 @@ Section order is now: Noise control, Sound, Auto power-off, Listening, Device, P
 
 ## Deliver
 T-entries in CLAUDE.md, screenshots stay in m4-private (they show the device name), a PR with findings. This check closes v0.11.0.
+
+## Also for v0.11.1
+- Install `m4-gaia-test-0.11.1.apk` instead (same checks above), plus:
+- Rotate the phone while connected (and fold/unfold to the cover screen): still connected, no reconnect.
+- Guard running, `adb shell am kill be.ryane.gaiatest`: within a minute `dumpsys activity services be.ryane.gaiatest` shows AutoOffService again and the guard log has "guard resumed after the app was killed".
+- Guard notification: text changes only between "In use: audio or a call" and "Idle. Switches off in N min" (N counts down per minute), not every 15 s.
+- The PR #23 checklist: rotate during Connect; Stop then Start the guard within 3 s; raw `FF 03 00 00 04 95 15 00` -> "BLOCKED (device rename)"; Device card fills.
+- PC: put the M4 address in `windows-client/m4_addr.txt`; `gaia_client.py verify` connects "found by GAIA UUID"; with no address it stops with the help text.

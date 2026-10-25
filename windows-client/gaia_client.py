@@ -23,7 +23,7 @@ Commands:
     check FILE.json     run documented-only SET/GET/restore steps (see run_check)
 
 Common options:
-    --addr AA:BB:CC:DD:EE:FF   headset MAC (default from capture)
+    --addr AA:BB:CC:DD:EE:FF   headset MAC (default: $M4_ADDR, then windows-client/m4_addr.txt)
     --channel N                force RFCOMM channel (skip SDP/sweep)
     --log DIR                  log directory (default ./logs; %USERPROFILE%\\m4-private\\logs
                                when started from under C:\\Windows)
@@ -48,8 +48,17 @@ from datetime import datetime
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools"))
 import m4_commands as M4  # noqa: E402  (documented command table, shared with the decoder)
 
-DEFAULT_ADDR = "80:C3:BA:4D:6A:24"   # Ryane's M4, from the HCI capture
-DOC_CHANNEL = 15                     # GAIA RFCOMM channel seen in the capture
+# Headset address: --addr, else the M4_ADDR environment variable, else the first line of
+# windows-client/m4_addr.txt (git-ignored, stays on your PC). Not stored in the code.
+ADDR_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "m4_addr.txt")
+
+
+def default_addr():
+    a = os.environ.get("M4_ADDR", "").strip()
+    if not a and os.path.exists(ADDR_FILE):
+        with open(ADDR_FILE, encoding="utf-8") as f:
+            a = f.readline().strip()
+    return a or None
 SENNHEISER = 0x0495
 QUALCOMM = 0x001D
 
@@ -188,7 +197,7 @@ if IS_WINDOWS:
     _ws2.WSAGetLastError.restype = ctypes.c_int
 
     def _bt_addr_to_int(addr):
-        """'80:C3:BA:4D:6A:24' -> 0x80C3BA4D6A24 (MAC octets, big-endian)."""
+        """'AA:BB:CC:DD:EE:FF' -> 0xAABBCCDDEEFF (MAC octets, big-endian)."""
         parts = addr.split(":")
         if len(parts) != 6:
             raise ValueError("bad BT address: %r" % addr)
@@ -281,16 +290,18 @@ class Link:
     def _candidate_channels(self):
         if self.forced_channel:
             return [self.forced_channel]
-        chans = []
+        # Only channels the headset itself names: the OS lookup by GAIA UUID (Windows) or SDP.
+        # No guessed or "usual" channel: GAIA frames on another RFCOMM service (e.g. iAP2)
+        # powered an ACCENTUM off (docs/protocol.md), and the M4's channel moves (capture 2).
+        # A raw channel number is used only when you pass --channel yourself.
         sdp = sdp_lookup(self.addr)
         if sdp:
             self.log.note("SDP found GAIA on channel %d" % sdp)
-            chans.append(sdp)
-        if DOC_CHANNEL not in chans:
-            chans.append(DOC_CHANNEL)            # documented fallback
-        # No guessed channels: GAIA frames on another RFCOMM service (e.g. iAP2)
-        # powered an ACCENTUM off (docs/protocol.md). Removed the 1-30 sweep.
-        return chans
+            return [sdp]
+        if IS_WINDOWS:
+            return [None]                        # connect by GAIA service UUID only
+        self.log.note("no SDP result; pass --channel N if you know the GAIA channel (see docs/protocol.md)")
+        return []
 
     def connect(self, timeout=10.0):
         for ch in self._candidate_channels():
@@ -298,7 +309,7 @@ class Link:
                 s = open_rfcomm(self.addr, ch, timeout)
                 s.settimeout(1.0)
                 self.sock, self.channel, self.rxbuf = s, ch, bytearray()
-                self.log.note("connected on RFCOMM channel %d" % ch)
+                self.log.note("connected on RFCOMM channel %s" % (ch if ch else "found by GAIA UUID"))
                 return True
             except OSError as e:
                 if self.forced_channel:
@@ -785,7 +796,7 @@ def main():
     ap = argparse.ArgumentParser(description="MOMENTUM 4 GAIA client")
     ap.add_argument("command", nargs="?", default="verify")
     ap.add_argument("args", nargs="*")
-    ap.add_argument("--addr", default=DEFAULT_ADDR)
+    ap.add_argument("--addr", default=None)
     ap.add_argument("--channel", type=int, default=None)
     ap.add_argument("--log", default=None)
     ap.add_argument("--out", default=None, help="snapshot: output JSON file")
@@ -818,6 +829,11 @@ def main():
 
     log = Logger(args.log)
     log.note("gaia_client.py @ %s" % git_hash())
+    if not args.addr:
+        args.addr = default_addr()
+    if not args.addr:
+        sys.exit("No headset address. Pass --addr AA:BB:CC:DD:EE:FF, set M4_ADDR, or put it on the first line of "
+                 + ADDR_FILE + " (git-ignored). Find it in Windows Settings > Bluetooth > the headphones > Properties.")
     link = Link(args.addr, log, channel=args.channel)
     log.note("connecting to %s" % args.addr)
     if not link.connect():
