@@ -1,6 +1,6 @@
 # Design spec v3: "Copper on black" (Nothing-inspired simplicity)
 
-Status: **proposal for Ryane's review, 25 Oct 2026. Not built.** Design only: no app code changes in this step.
+Status: **built as v0.12.0 (25 Oct 2026, approved by Ryane).** Not yet run on a phone: docs/local-test-v0.12.0.md.
 Builds on what shipped in v0.11.1 (direction A from `docs/design-spec-v2.md`: `Tok.java`, `res/values(-night)/colors.xml`, `EqCurve`, `FaderTrack`, pilot dot). v3 changes the **palette**, the **structure** (one home screen + sub-pages instead of one long scroll) and the **type voice**. Everything else in v2 stays: hard rules, microcopy (v2 section 6), widget dark-mode mechanics (v2 4.3), tile rules (v2 5).
 Mock-up: same canvas, boards "v3 ..." (https://claude.ai/artifact/PWtctghujwp6ReAKvvwHNz).
 

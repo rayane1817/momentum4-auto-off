@@ -2,6 +2,14 @@
 
 Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control channel (RFCOMM, UUID `a2129ff3-081b-4c45-8afe-469d9c4842ec`) and sends single commands. No internet permission, no libraries, Bluetooth only.
 
+## v0.12.0: design v3 "Copper on black" (docs/design-spec-v3.md)
+- New layout: a Home page for daily use (status + Connect, battery in dot numerals, noise control, auto power-off), plus tiles that open Sound, Listening and Device pages. Back returns to Home.
+- Dark mode is true black (OLED); light mode is neutral grey. Copper stays the only accent.
+- Pill-shaped keys and buttons, 24 dp panels, monospace caps labels.
+- Device picker, Rescan, values, guard log, Advanced and Log moved to the Device page. Idle time and autostart sit under the guard summary line (tap to expand).
+- Widgets: "NOISE · AS LAST SET" / "NOISE · TAP A MODE", pill keys, round EQ arrows, "PRESET 02 / 10".
+- Restyle only: every control sends the same frames as v0.11.2 (diffed).
+
 ## v0.11.2: layout fixes from the two-phone run (Nokia XR20 + Z Flip6)
 - Widgets now land as 3 x 1 on every launcher, can be resized in both directions down to 2 x 1, and their keys grow with the widget instead of leaving empty space.
 - Numbers use the normal system font with even-width digits (stock Android showed a wide typewriter font).

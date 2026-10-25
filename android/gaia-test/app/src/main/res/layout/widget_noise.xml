@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Noise widget, design v2 (spec 4.1). Colours only from @color, so the launcher repaints it in dark mode itself. -->
+<!-- Noise widget, design v3 (docs/design-spec-v3.md). Colours only from @color, so the launcher repaints it in dark mode itself. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
     android:orientation="vertical" android:padding="8dp" android:background="@drawable/w_bg">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingBottom="4dp" android:paddingStart="4dp" android:paddingEnd="4dp">
         <TextView android:id="@+id/w_title" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
-            android:text="M4" android:textColor="@color/ink2" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" />
+            android:text="NOISE · TAP A MODE" android:textColor="@color/ink2" android:textSize="11sp" android:fontFamily="monospace" android:letterSpacing="0.12" android:maxLines="1" android:ellipsize="end" />
         <TextView android:id="@+id/w_note" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="as last set" android:textColor="@color/ink2" android:textSize="12sp" />
+            android:text="" android:textColor="@color/ink2" android:textSize="11sp" android:visibility="gone" />
     </LinearLayout>
     <!-- the key row takes all the height the launcher gives (at least 36 dp): bigger widget = bigger keys, no empty band -->
     <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:minHeight="36dp" android:orientation="horizontal" android:padding="3dp" android:background="@drawable/w_track">
