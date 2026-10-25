@@ -3,7 +3,7 @@
 Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control channel (RFCOMM, UUID `a2129ff3-081b-4c45-8afe-469d9c4842ec`) and sends single commands. No internet permission, no libraries, Bluetooth only.
 
 ## Install (Samsung)
-1. On the phone, open this repo on GitHub, go to `android/gaia-test/release/` and download the latest `m4-gaia-test-*.apk` (currently 0.8), or grab it from the Releases page.
+1. On the phone, open this repo on GitHub, go to `android/gaia-test/release/` and download the latest `m4-gaia-test-*.apk` (currently 0.9), or grab it from the Releases page.
 2. Open it. Samsung asks to allow installs from that app (Chrome / My Files): allow once.
 3. Google Play Protect may warn about an unknown app: "Install anyway". It's our own debug-signed build.
 
@@ -12,6 +12,13 @@ Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control cha
 2. Headphones on and connected to the phone as usual.
 3. Open "M4 GAIA test", allow "Nearby devices", pick the MOMENTUM 4, tap Connect.
 4. Tap the buttons, then "Copy log" and paste the log in the chat.
+
+## v0.9
+- **EQ presets**: Neutral, Rock, Pop, Dance, Hip-Hop, Classical, Movie, Jazz (Smart Control's values, checked against our capture). The matching preset is highlighted, like in Smart Control.
+- EQ sliders in **0.1 dB** steps (was 0.5), read in one go with `1003 [00]`.
+- **Comfort call** (`0814`/`0815`) and **Touch controls** (`1606`/`1607`, inverted on the wire).
+- **"Restart needed" hint** under Hi-Res, from `1407` (01 = a Hi-Res change waits for a restart).
+- Not yet tested on the headset.
 
 ## Smart Control Plus parity (v0.8)
 Built from the capture-2 decode (`../docs/config-spec.md`), same frames as the official app:

@@ -35,11 +35,21 @@ Step 1 of the roundtable plan. Goal: fill gaps in our M4 command map without new
 | `0607`, `0613`, `0685` (and the `0609`-`06FF` group) | Link reset, headset offline | already blocked |
 | `0801`, `0805`, `0817` with a device index | omarchy blocklisted them on the "indexed payload, empty OK" signature, effect unknown | **Not blocked.** SCP itself sends `0801 [02]` (voice prompts), `0805 [level]` (call transparency) and `0817 [0/1]` (low latency), and T13 used `0817`. Use only those exact forms. |
 
+## Confirmed against our own capture 2 (25 Oct 2026)
+- **EQ presets**: all 8 Smart Control presets (omarchy `presets.json`, also used by timmo001/omarchy-momentumctl) match the `1082` curves in capture 2 exactly, in the order Ryane tapped them (22:31:06 to 22:31:36). dB: Neutral 0/0/0/0/0, Rock 0/2/2.5/1.5/-2, Pop 0/-2.5/0/2.5/0, Dance 3.5/2/-1.5/1.5/3, Hip-Hop 3/1.5/-1.5/0/-1.5, Classical -2/-1.5/0/3.5/4, Movie 0/0/2/2/-2, Jazz -3.2/0/2.2/2.2/0.
+- **EQ step**: the slider writes 0.1 dB steps (curves with 0.4 and 0.1 dB seen at 22:33), up to +6.0 dB.
+- **`1A00` 2-byte writes work**: every `1A00 [01 x]` write in capture 2 is followed by a `1A81` notif showing the new value. omarchy's "no partial writes" does not hold on Ryane's M4 (both forms may work).
+
+## More sources (25 Oct 2026)
+- [timmo001/omarchy-momentumctl](https://github.com/timmo001/omarchy-momentumctl) (TypeScript CLI + panel): same command table as omarchy, adds a Harman preset fitted from AutoEq (-3.5/-0.5/2.5/-0.5/-0.5 dB), reads EQ with `1003 [00]`, writes anti-wind by read-modify-write of the 6-byte `1A01` table with order off/max/auto. Its `.agents/skills` are generic coding skills (Effect, TypeScript style, code review, writing style), nothing protocol-specific.
+- [f3Y0/momentum4-control](https://github.com/f3Y0/momentum4-control) (Python GUI): ANC, transparency, bass boost; finds GAIA by probing RFCOMM channels `[2, 1, 15, 14, 12, 3..11]`. We keep SDP/UUID lookup: channel 14 can be Apple iAP2 on some hosts, and sending GAIA there powered an ACCENTUM off (Oein).
+- [gjabell/momentumctl](https://codeberg.org/galen/momentumctl) (Rust CLI): source of the battery, on-head, auto-answer, smart pause and comfort-call IDs; nothing new beyond those.
+
 ## Conflicts to settle on hardware (local session, Phase 4/5)
 | Item | Ours (capture 2) | omarchy | Note |
 |---|---|---|---|
-| Anti-wind values in `1A00 [01, x]` | 1 = Auto, 2 = Max | 1 = Max, 2 = Auto | Session-start `1A81` had anti-wind = 2 while SCP showed Max, which supports ours. Phase 5 (SCP label oracle) settles it. |
-| `1A00` write length | SCP sends 2 bytes `[mode, state]` | "no partial writes", full 6-byte table | Both may work. Phase 4 test 5. |
+| Anti-wind values in `1A00 [01, x]` | 1 = Auto, 2 = Max | 1 = Max, 2 = Auto (timmo001 ships the same) | Session-start `1A81` had anti-wind = 2 while SCP showed Max, which supports ours. Phase 5 (SCP label oracle) settles it. |
+| `1A00` write length | SCP sends 2 bytes `[mode, state]` | "no partial writes", full 6-byte table | **Settled for 2 bytes**: capture 2 shows the headset applying them (see above). |
 | EQ band labels | SCP UI 63 / 250 / 1k / 4k / 8k Hz | `100B` centres 90 / 325 / 1500 / 6500 / 6500 Hz | Labels vs real filter centres. Cosmetic. Keep the SCP labels. |
 
 ## Next
