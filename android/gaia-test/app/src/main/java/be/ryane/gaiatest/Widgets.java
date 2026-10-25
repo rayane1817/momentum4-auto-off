@@ -120,8 +120,8 @@ final class Widgets {
             v.setOnClickPendingIntent(ids[i], broadcast(c, NoiseWidget.class, ACT_NOISE, EXTRA_MODE, i, 10 + i));
         }
         boolean known = mode >= 0;
-        v.setTextViewText(R.id.w_title, known ? prefs(c).getString("devName", "M4") : "Tap a mode. Not read yet.");
-        v.setViewVisibility(R.id.w_note, known ? View.VISIBLE : View.GONE);
+        v.setTextViewText(R.id.w_title, known ? "NOISE · AS LAST SET" : "NOISE · TAP A MODE");
+        v.setViewVisibility(R.id.w_note, View.GONE);
         v.setOnClickPendingIntent(R.id.w_title, openApp(c));
         return v;
     }
@@ -133,7 +133,7 @@ final class Widgets {
         boolean known = i >= 0 && i < all.size();
         v.setTextViewText(R.id.w_eq_name, eqName(c));
         v.setViewVisibility(R.id.w_eq_dot, known ? View.VISIBLE : View.GONE);
-        v.setTextViewText(R.id.w_eq_pos, known ? "Preset " + (i + 1) + " of " + all.size() : "");
+        v.setTextViewText(R.id.w_eq_pos, known ? String.format(java.util.Locale.ROOT, "PRESET %02d / %02d", i + 1, all.size()) : "");
         v.setViewVisibility(R.id.w_eq_pos, known ? View.VISIBLE : View.GONE);
         v.setOnClickPendingIntent(R.id.w_eq_prev, broadcast(c, EqWidget.class, ACT_EQ_STEP, EXTRA_STEP, -1, 20));
         v.setOnClickPendingIntent(R.id.w_eq_next, broadcast(c, EqWidget.class, ACT_EQ_STEP, EXTRA_STEP, 1, 21));

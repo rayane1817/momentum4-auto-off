@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Design v2, direction A "Copper and graphite" (docs/design-spec-v2.md section 2.1). Light. -->
+<!-- Design v3 "Copper on black" (docs/design-spec-v3.md). Light. -->
 <resources>
-    <color name="bg">#F3F0EA</color>
-    <color name="surface">#FBFAF7</color>
-    <color name="sunk">#E8E4DC</color>
-    <color name="ink">#1C1B19</color>
-    <color name="ink2">#5C5851</color>
-    <color name="rule">#D6D0C5</color>
-    <color name="rule_strong">#8F887D</color>
-    <color name="on_key">#F3F0EA</color>
+    <color name="bg">#F4F4F2</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="sunk">#EBEBE8</color>
+    <color name="ink">#0A0A0A</color>
+    <color name="ink2">#5E5E5E</color>
+    <color name="rule">#E2E2DE</color>
+    <color name="rule_strong">#8A8A85</color>
+    <color name="on_key">#FFFFFF</color>
     <color name="copper">#9A4E1C</color>
     <color name="on_copper">#FFFFFF</color>
-    <color name="pilot">#B8662B</color>
-    <color name="pilot_on_key">#B8662B</color>
-    <color name="danger">#A3241A</color>
+    <color name="pilot">#9A4E1C</color>
+    <color name="pilot_on_key">#D98C55</color>
+    <color name="danger">#B3261E</color>
     <color name="on_danger">#FFFFFF</color>
     <color name="transparent">#00000000</color>
 </resources>

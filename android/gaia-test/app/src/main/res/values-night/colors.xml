@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Design v2, direction A. Dark: warm graphite, not pure black. -->
+<!-- Design v3 "Copper on black" (docs/design-spec-v3.md). Dark: true black (OLED). -->
 <resources>
-    <color name="bg">#141311</color>
-    <color name="surface">#1C1B19</color>
-    <color name="sunk">#272522</color>
-    <color name="ink">#EEEAE3</color>
-    <color name="ink2">#A9A39A</color>
-    <color name="rule">#34312C</color>
-    <color name="rule_strong">#6E685F</color>
-    <color name="on_key">#141311</color>
-    <color name="copper">#E09A63</color>
-    <color name="on_copper">#1A1208</color>
-    <color name="pilot">#E09A63</color>
+    <color name="bg">#000000</color>
+    <color name="surface">#121212</color>
+    <color name="sunk">#1E1E1E</color>
+    <color name="ink">#F5F5F5</color>
+    <color name="ink2">#9A9A9A</color>
+    <color name="rule">#262626</color>
+    <color name="rule_strong">#6B6B6B</color>
+    <color name="on_key">#000000</color>
+    <color name="copper">#D98C55</color>
+    <color name="on_copper">#000000</color>
+    <color name="pilot">#D98C55</color>
     <color name="pilot_on_key">#9A4E1C</color>
-    <color name="danger">#F0857A</color>
-    <color name="on_danger">#1A0907</color>
+    <color name="danger">#FF7A6E</color>
+    <color name="on_danger">#000000</color>
     <color name="transparent">#00000000</color>
 </resources>
