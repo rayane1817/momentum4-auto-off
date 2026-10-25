@@ -86,6 +86,7 @@ public class MainActivity extends Activity {
 
     private volatile BluetoothSocket socket;
     private volatile OutputStream out;
+    private volatile boolean destroyed;
     private boolean ancOn, adaptiveOn, applying;
     private SharedPreferences prefs;
 
@@ -1054,8 +1055,9 @@ public class MainActivity extends Activity {
                 s.connect();
                 socket = s;
                 out = s.getOutputStream();
+                if (destroyed) { closeQuietly(); return; }   // rotated or closed while connecting: don't keep the link
                 runOnUiThread(() -> { setConnected(true); registerNotifications(); readAllConfig(); });
-                readLoop(s.getInputStream());
+                readLoop(s, s.getInputStream());
             } catch (IOException e) {
                 append("Connect failed: " + e.getMessage()
                         + "\nTry: force stop Smart Control Plus; make sure the MOMENTUM 4 is connected to this device;"
@@ -1069,7 +1071,7 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    private void readLoop(InputStream in) {
+    private void readLoop(BluetoothSocket s, InputStream in) {
         Gaia.Parser parser = new Gaia.Parser();
         byte[] buf = new byte[1024];
         try {
@@ -1083,6 +1085,8 @@ public class MainActivity extends Activity {
         } catch (IOException ignored) {
         }
         append("Disconnected.");
+        BluetoothSocket cur = socket;
+        if (cur != null && cur != s) return;                 // a newer link is live: leave it alone
         closeQuietly();
         runOnUiThread(() -> {
             setConnected(false);
@@ -1091,7 +1095,8 @@ public class MainActivity extends Activity {
     }
 
     private void setConnected(boolean on) {
-        live = on ? this : null;
+        if (on) live = this;
+        else if (live == this) live = null;
         if (!on) eqSync.disconnected();
         connecting = false;
         if (on) setStatus(1, "Connected");
@@ -1252,5 +1257,5 @@ public class MainActivity extends Activity {
     private int dp(float v) { return Math.round(v * getResources().getDisplayMetrics().density); }
 
     @Override
-    protected void onDestroy() { if (live == this) live = null; closeQuietly(); sender.shutdown(); super.onDestroy(); }
+    protected void onDestroy() { destroyed = true; if (live == this) live = null; closeQuietly(); sender.shutdown(); super.onDestroy(); }
 }
