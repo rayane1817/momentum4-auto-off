@@ -2,14 +2,15 @@
 <!-- Noise widget, design v2 (spec 4.1). Colours only from @color, so the launcher repaints it in dark mode itself. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:gravity="center_vertical" android:padding="12dp" android:background="@drawable/w_bg">
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingBottom="8dp">
+    android:orientation="vertical" android:padding="8dp" android:background="@drawable/w_bg">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingBottom="4dp" android:paddingStart="4dp" android:paddingEnd="4dp">
         <TextView android:id="@+id/w_title" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
-            android:text="M4" android:textColor="@color/ink2" android:textSize="13sp" android:maxLines="1" android:ellipsize="end" />
+            android:text="M4" android:textColor="@color/ink2" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" />
         <TextView android:id="@+id/w_note" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="as last set" android:textColor="@color/ink2" android:textSize="13sp" />
+            android:text="as last set" android:textColor="@color/ink2" android:textSize="12sp" />
     </LinearLayout>
-    <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:orientation="horizontal" android:padding="3dp" android:background="@drawable/w_track">
+    <!-- the key row takes all the height the launcher gives (at least 36 dp): bigger widget = bigger keys, no empty band -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:minHeight="36dp" android:orientation="horizontal" android:padding="3dp" android:background="@drawable/w_track">
         <FrameLayout android:id="@+id/w_adaptive" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:clickable="true" android:focusable="true" android:contentDescription="Adaptive">
             <LinearLayout android:id="@+id/w_adaptive_on" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center" android:orientation="horizontal" android:visibility="gone">
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="11sp" android:textColor="@color/pilot_on_key" android:paddingEnd="6dp" />

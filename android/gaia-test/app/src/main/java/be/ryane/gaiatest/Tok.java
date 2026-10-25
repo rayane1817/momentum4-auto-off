@@ -13,7 +13,12 @@ final class Tok {
 
     static final Typeface MEDIUM = Typeface.create("sans-serif-medium", Typeface.NORMAL);
     static final Typeface REGULAR = Typeface.create("sans-serif", Typeface.NORMAL);
-    static final Typeface MONO = Typeface.MONOSPACE;
+    /** Readouts: the system sans with tabular digits (set via TABULAR), not a monospace family:
+     *  stock Android falls back to a wide typewriter mono (Nokia run, design spec 10.3). */
+    static final Typeface MONO = REGULAR;
+    static final String TABULAR = "tnum";
+    /** Only the raw log keeps a real monospace face. */
+    static final Typeface CODE = Typeface.MONOSPACE;
 
     Tok(Context c) {
         bg = c.getColor(R.color.bg);

@@ -2,6 +2,13 @@
 
 Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control channel (RFCOMM, UUID `a2129ff3-081b-4c45-8afe-469d9c4842ec`) and sends single commands. No internet permission, no libraries, Bluetooth only.
 
+## v0.11.2: layout fixes from the two-phone run (Nokia XR20 + Z Flip6)
+- Widgets now land as 3 x 1 on every launcher, can be resized in both directions down to 2 x 1, and their keys grow with the widget instead of leaving empty space.
+- Numbers use the normal system font with even-width digits (stock Android showed a wide typewriter font).
+- Dialogs use copper instead of the system blue, in light and dark.
+- EQ tile shows "EQ: Custom" instead of a cut-off "EQ: Custom curve".
+- Speech clarity is greyed out with "Turn off Hi-Res 24/96 first." while Hi-Res is on (the headphones refuse it then). If the headphones refuse a change anyway, the app reads the real value back. "Already set" replies are no longer errors.
+
 ## v0.11.1: review fixes (PR #23) + the 5 review proposals
 - From the first code review: error replies are no longer shown as values; rotating during Connect can't leave a hidden link; no guard crash or double guard after a quick Stop/Start; the app now also blocks rename (`1500`).
 - **The guard comes back by itself** if Android kills the app while it runs (Samsung's memory manager), using the saved headphones and time.

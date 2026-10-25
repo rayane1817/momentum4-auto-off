@@ -397,7 +397,7 @@ public class MainActivity extends Activity {
         c.addView(save);
         rebuildPresetChips();
         swBass = switchRow(c, "Bass boost", null, on -> toggle(0x1008, on));
-        swSpeech = switchRow(c, "Speech clarity", null, on -> send(b2(0x0803, 0, on ? 2 : 1)));
+        swSpeech = switchRow(c, "Speech clarity", "Turn off Hi-Res 24/96 first.", on -> send(b2(0x0803, 0, on ? 2 : 1)));
         gate(swBass); gate(swSpeech);
         return cardWrap(c);
     }
@@ -474,7 +474,7 @@ public class MainActivity extends Activity {
         final int[] chosen = {firstFree < 0 ? 0 : firstFree};
         EditText name = field(InputType.TYPE_CLASS_TEXT, "Name, e.g. Commute");
         name.setSingleLine(true);
-        new AlertDialog.Builder(this)
+        new AlertDialog.Builder(this, R.style.AlertTheme)
                 .setTitle("Save custom preset")
                 .setView(padded(name))
                 .setSingleChoiceItems(slots, chosen[0], (d, w) -> chosen[0] = w)
@@ -492,7 +492,7 @@ public class MainActivity extends Activity {
         EditText name = field(InputType.TYPE_CLASS_TEXT, "");
         name.setText(p.name);
         name.setSingleLine(true);
-        new AlertDialog.Builder(this)
+        new AlertDialog.Builder(this, R.style.AlertTheme)
                 .setTitle("Custom preset " + (p.slot + 1))
                 .setView(padded(name))
                 .setPositiveButton("Rename", (d, w) -> { Presets.saveCustom(this, p.slot, name.getText().toString(), p.gains); rebuildPresetChips(); Widgets.refresh(this); })
@@ -516,7 +516,7 @@ public class MainActivity extends Activity {
         swTouch = switchRow(c, "Touch controls", null, on -> send(a(0x1606, on ? 0 : 1)));   // inverted: 0 = enabled
         gate(swComfort); gate(swTouch);
         swHiRes = switchRow(c, "Hi-Res 24/96", "Takes effect after you restart the headphones.",
-                on -> { send(a(0x0405, on ? 0 : 1)); send(g(0x0406)); });   // 0 = Hi-Res on
+                on -> { send(a(0x0405, on ? 0 : 1)); send(g(0x0406)); applySpeechRule(); });   // 0 = Hi-Res on
         gate(swSmartPause); gate(swAutoAnswer); gate(swOnHead); gate(swLowLatency); gate(swHiRes);
         TextView[] tv = new TextView[1];
         callSeek = slider(c, "Transparency during calls", 4, tv, p -> p == 0 ? "off" : p + " / 4",
@@ -545,7 +545,7 @@ public class MainActivity extends Activity {
         idleMinutes = field(InputType.TYPE_CLASS_NUMBER, "");
         idleMinutes.setText(String.valueOf(prefs.getInt("minutes", 15)));
         idleMinutes.setGravity(Gravity.CENTER);
-        idleMinutes.setTypeface(Tok.MONO);
+        idleMinutes.setFontFeatureSettings(Tok.TABULAR);
         row.addView(idleMinutes, new LinearLayout.LayoutParams(dp(72), dp(44)));
         TextView mins = body("min");
         mins.setPadding(dp(8), 0, 0, 0);
@@ -596,7 +596,7 @@ public class MainActivity extends Activity {
         gate(readT);
         tr.addView(readT);
         secondsField = field(InputType.TYPE_CLASS_NUMBER, "seconds");
-        secondsField.setTypeface(Tok.MONO);
+        secondsField.setFontFeatureSettings(Tok.TABULAR);
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(0, dp(44), 1f);
         sp.leftMargin = dp(8); sp.rightMargin = dp(8);
         tr.addView(secondsField, sp);
@@ -607,7 +607,7 @@ public class MainActivity extends Activity {
 
         inner.addView(caption("Raw frame (hex)"));
         hexField = field(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS, "FF 03 00 00 04 95 06 03");
-        hexField.setTypeface(Tok.MONO);
+        hexField.setTypeface(Tok.CODE);
         LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, dp(44));
         hp.topMargin = dp(4); hp.bottomMargin = dp(8);
         inner.addView(hexField, hp);
@@ -622,7 +622,7 @@ public class MainActivity extends Activity {
         LinearLayout inner = new LinearLayout(this);
         inner.setOrientation(LinearLayout.VERTICAL);
         log = new TextView(this);
-        log.setTypeface(Tok.MONO);
+        log.setTypeface(Tok.CODE);
         log.setTextSize(11);
         log.setTextColor(T.ink2);
         log.setTextIsSelectable(true);
@@ -718,13 +718,15 @@ public class MainActivity extends Activity {
         LinearLayout labels = new LinearLayout(this);
         labels.setOrientation(LinearLayout.VERTICAL);
         labels.addView(body(label));
-        if (note != null) labels.addView(caption(note));
+        TextView noteView = note == null ? null : caption(note);
+        if (noteView != null) labels.addView(noteView);
         row.addView(labels, new LinearLayout.LayoutParams(0, -2, 1f));
         Switch s = new Switch(this);
         tintSwitch(s);
         s.setOnCheckedChangeListener((b, checked) -> { if (!applying) onChange.on(checked); });
         row.addView(s);
         parent.addView(row);
+        s.setTag(noteView);                    // the caption under the label, if any
         return s;
     }
 
@@ -755,6 +757,7 @@ public class MainActivity extends Activity {
         t.setText(s);
         t.setTextSize(sp);
         t.setTypeface(tf);
+        if (tf == Tok.MONO) t.setFontFeatureSettings(Tok.TABULAR);
         t.setTextColor(color);
         return t;
     }
@@ -853,9 +856,20 @@ public class MainActivity extends Activity {
 
     private void gate(View v) { gated.add(v); }
 
+    /** The headset refuses Speech clarity while Hi-Res is on (0803 -> error 0x83, T39): say so instead of failing. */
+    private void applySpeechRule() {
+        if (swSpeech == null || swHiRes == null) return;
+        boolean linked = out != null, locked = swHiRes.isChecked() && !swSpeech.isChecked();
+        swSpeech.setEnabled(linked && !locked);
+        swSpeech.setAlpha(linked && !locked ? 1f : DISABLED);
+        Object note = swSpeech.getTag();
+        if (note instanceof TextView) ((TextView) note).setVisibility(locked ? View.VISIBLE : View.GONE);
+    }
+
     private void setGroupEnabled(boolean on) {
         for (View v : gated) { v.setEnabled(on); v.setAlpha(on ? 1f : DISABLED); }
         if (noiseHint != null) noiseHint.setVisibility(on ? View.GONE : View.VISIBLE);
+        applySpeechRule();
     }
 
     /** Segmented keys on a sunk track; the selected key is ink-filled with the pilot dot. */
@@ -923,9 +937,14 @@ public class MainActivity extends Activity {
     /** Update the UI from a reply/notification without firing writes. */
     private void onFrame(Gaia.Frame f) {
         if (f.vendor != Gaia.SENNHEISER) return;
-        if (f.type() == 3) return;      // error reply: payload[0] is an error code, not a value
         int base = f.base();
         int b0 = f.payload.length >= 1 ? f.payload[0] & 0xFF : -1;
+        if (f.type() == 3) {            // error reply: payload[0] is an error code, not a value
+            // 0x80 = value already set (no change). A refused Speech clarity write (0x83 while Hi-Res is on, T39):
+            // read the real sound mode back so the switch doesn't show a state the headset refused.
+            if (base == 0x0803 && b0 != 0x80) send(g(0x0804));
+            return;
+        }
         applying = true;
         switch (base) {
             case 0x0603: if (b0 >= 0) { setValue(vBattery, b0 + " %"); headerBattery.setText(b0 + " %"); } break;
@@ -950,7 +969,7 @@ public class MainActivity extends Activity {
             case 0x080B: if (b0 >= 0) swAutoAnswer.setChecked(b0 == 1); break;
             case 0x0818: if (b0 >= 0) swLowLatency.setChecked(b0 == 1); break;
             case 0x0401: if (b0 >= 0) swOnHead.setChecked(b0 == 1); break;
-            case 0x0406: if (b0 >= 0) swHiRes.setChecked(b0 == 0); break;   // 0 = Hi-Res on
+            case 0x0406: if (b0 >= 0) { swHiRes.setChecked(b0 == 0); applySpeechRule(); } break;   // 0 = Hi-Res on
             case 0x0806: if (b0 >= 0 && b0 <= 4) callSeek.setProgress(b0); break;
             case 0x1009: if (b0 >= 0) swBass.setChecked(b0 == 1); break;
             case 0x0804: if (f.payload.length >= 2) swSpeech.setChecked(Gaia.u16(f.payload, 0) == 2); break;
@@ -1167,7 +1186,7 @@ public class MainActivity extends Activity {
 
     private void powerOffNow() {
         if (out == null) { toast("Connect first"); return; }
-        new AlertDialog.Builder(this)
+        new AlertDialog.Builder(this, R.style.AlertTheme)
                 .setTitle("Power off the headphones?")
                 .setMessage("They switch off fully. Only the button on the headphones turns them back on.")
                 .setPositiveButton("Power off", (d, w) -> send(Gaia.powerOff()))
@@ -1190,7 +1209,7 @@ public class MainActivity extends Activity {
         catch (NumberFormatException e) { toast("Enter minutes"); return; }
         if (minutes < 1) { toast("At least 1 minute"); return; }
         if (!isMomentum(device) && !confirmedOther) {
-            new AlertDialog.Builder(this)
+            new AlertDialog.Builder(this, R.style.AlertTheme)
                     .setTitle("Use " + nameOf(device) + "?")
                     .setMessage("This is not a MOMENTUM 4. The guard would try to switch off this device instead of your headphones.")
                     .setPositiveButton("Use it anyway", (d, w) -> { confirmedOther = true; startGuard(); confirmedOther = false; })
