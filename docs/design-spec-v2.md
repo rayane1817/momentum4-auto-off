@@ -1,6 +1,6 @@
 # Design spec v2: app, widgets, tiles (draft for Ryane's pick)
 
-Status: **proposal, not built.** Phase 3 (code) starts only after Ryane picks or adjusts a direction AND the local v0.10 hardware PR (`local/v010-validation-*`) is merged.
+Status: **direction A chosen by Ryane (25 Oct 2026), name stays "M4 GAIA test" for now. Not built yet.** Phase 3 (code) starts only after Ryane picks or adjusts a direction AND the local v0.10 hardware PR (`local/v010-validation-*`) is merged.
 Research behind it: `docs/design-research.md`. Mock-up (private canvas, Ryane's account): https://claude.ai/artifact/PWtctghujwp6ReAKvvwHNz Replaces the look of `docs/ux-spec.md`; the structure and every behaviour of v0.10 stay.
 
 Hard rules for Phase 3:
