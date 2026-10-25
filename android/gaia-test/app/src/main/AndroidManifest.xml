@@ -16,5 +16,23 @@
         <service android:name=".AutoOffService"
                  android:exported="false"
                  android:foregroundServiceType="connectedDevice" />
+
+        <receiver android:name=".Widgets$NoiseWidget" android:exported="true" android:label="M4 noise control">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_noise_info" />
+        </receiver>
+        <receiver android:name=".Widgets$EqWidget" android:exported="true" android:label="M4 EQ preset">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_eq_info" />
+        </receiver>
+
+        <service android:name=".NoiseTile" android:exported="true" android:label="M4 noise"
+                 android:icon="@drawable/ic_tile_anc" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
+        </service>
+        <service android:name=".EqTile" android:exported="true" android:label="M4 EQ"
+                 android:icon="@drawable/ic_tile_eq" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
+        </service>
     </application>
 </manifest>

@@ -3,7 +3,7 @@
 Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control channel (RFCOMM, UUID `a2129ff3-081b-4c45-8afe-469d9c4842ec`) and sends single commands. No internet permission, no libraries, Bluetooth only.
 
 ## Install (Samsung)
-1. On the phone, open this repo on GitHub, go to `android/gaia-test/release/` and download the latest `m4-gaia-test-*.apk` (currently 0.9.1), or grab it from the Releases page.
+1. On the phone, open this repo on GitHub, go to `android/gaia-test/release/` and download the latest `m4-gaia-test-*.apk` (currently 0.10), or grab it from the Releases page.
 2. Open it. Samsung asks to allow installs from that app (Chrome / My Files): allow once.
 3. Google Play Protect may warn about an unknown app: "Install anyway". It's our own debug-signed build.
 
@@ -12,6 +12,16 @@ Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control cha
 2. Headphones on and connected to the phone as usual.
 3. Open "M4 GAIA test", allow "Nearby devices", pick the MOMENTUM 4, tap Connect.
 4. Tap the buttons, then "Copy log" and paste the log in the chat.
+
+## v0.10: widgets, Quick Settings tiles, custom presets
+- **Home-screen widgets** (long-press the home screen > Widgets > M4 GAIA test):
+  - *M4 noise control*: Adaptive / Custom / Off, the current mode highlighted.
+  - *M4 EQ preset*: previous / next preset, name in the middle (tap the name to open the app).
+- **Quick Settings tiles** (edit the Quick Settings panel, drag them in): *M4 noise* cycles Adaptive > Custom > Off; *M4 EQ* steps to the next preset. Long-press a tile to open the app.
+- How they work: each tap connects, sends the same frames as the app, and disconnects (about 1 to 3 s). If the app is open and connected, they send through it instead. Nothing stays connected, so the guard and Smart Control keep working. If Smart Control holds the headphones, you get a "busy" message.
+- What they show is the last state this app set or read, because a widget can't read the headphones without connecting.
+- **5 custom EQ presets**: set the sliders, tap "Save current curve as a custom preset", pick a slot and a name. Custom presets show as ★ chips after the 8 built-ins and are part of the EQ widget/tile cycle. Long-press one to rename, overwrite or delete. They are stored on the phone (the headphones only keep the current curve).
+- Not yet tested on the headset: see `docs/local-test-v0.10.md`.
 
 ## v0.9.1 (fixes from the hardware session, PR #12)
 - **Anti-wind labels fixed**: on the wire 1 = Max, 2 = Auto (T17). v0.8 and v0.9 had Auto and Max swapped.
