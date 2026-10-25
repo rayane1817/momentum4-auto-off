@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="10dp" android:background="@drawable/w_bg">
+    <TextView android:id="@+id/w_title" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="MOMENTUM 4 · Noise" android:textColor="#FF5F6368" android:textSize="12sp" android:paddingBottom="6dp" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+        <Button android:id="@+id/w_adaptive" android:layout_width="0dp" android:layout_weight="1" android:layout_height="40dp"
+            android:text="Adaptive" android:textAllCaps="false" android:textSize="13sp" android:layout_marginEnd="4dp" android:background="@drawable/w_chip_off" />
+        <Button android:id="@+id/w_custom" android:layout_width="0dp" android:layout_weight="1" android:layout_height="40dp"
+            android:text="Custom" android:textAllCaps="false" android:textSize="13sp" android:layout_marginEnd="4dp" android:background="@drawable/w_chip_off" />
+        <Button android:id="@+id/w_off" android:layout_width="0dp" android:layout_weight="1" android:layout_height="40dp"
+            android:text="Off" android:textAllCaps="false" android:textSize="13sp" android:background="@drawable/w_chip_off" />
+    </LinearLayout>
+</LinearLayout>

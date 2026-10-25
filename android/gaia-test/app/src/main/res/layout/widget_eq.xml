@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="horizontal" android:gravity="center_vertical" android:padding="10dp" android:background="@drawable/w_bg">
+    <Button android:id="@+id/w_eq_prev" android:layout_width="48dp" android:layout_height="40dp"
+        android:text="‹" android:textSize="20sp" android:background="@drawable/w_chip_off" />
+    <TextView android:id="@+id/w_eq_name" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+        android:gravity="center" android:text="EQ" android:textColor="#FF1A1C1E" android:textSize="15sp" android:textStyle="bold" />
+    <Button android:id="@+id/w_eq_next" android:layout_width="48dp" android:layout_height="40dp"
+        android:text="›" android:textSize="20sp" android:background="@drawable/w_chip_off" />
+</LinearLayout>

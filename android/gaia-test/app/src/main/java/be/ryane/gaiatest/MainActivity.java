@@ -71,11 +71,10 @@ public class MainActivity extends Activity {
     private static final String[] EQ_BANDS = {"63 Hz", "250 Hz", "1 kHz", "4 kHz", "8 kHz"};
     private final SeekBar[] eqSeek = new SeekBar[5];
     private final int[] eqGain = new int[5];                     // current curve, dB x 10
-    private static final String[] PRESET_NAMES = {"Neutral", "Rock", "Pop", "Dance", "Hip-Hop", "Classical", "Movie", "Jazz"};
-    private static final int[][] PRESETS = {                     // dB x 10 per band
-            {0, 0, 0, 0, 0}, {0, 20, 25, 15, -20}, {0, -25, 0, 25, 0}, {35, 20, -15, 15, 30},
-            {30, 15, -15, 0, -15}, {-20, -15, 0, 35, 40}, {0, 0, 20, 20, -20}, {-32, 0, 22, 22, 0}};
-    private final Button[] presetBtns = new Button[PRESETS.length];
+    private LinearLayout presetChips;
+    private final List<Button> presetBtns = new ArrayList<>();
+    /** The app instance holding the GAIA link, used by widgets/tiles to send through it. */
+    static volatile MainActivity live;
     private final TextView[] eqValue = new TextView[5];
     private final java.util.ArrayDeque<Integer> pendingBands = new java.util.ArrayDeque<>();   // 1002 GETs in flight
     private Button guardButton;
@@ -234,6 +233,7 @@ public class MainActivity extends Activity {
                 ancOn = true; adaptiveOn = false;
             } else { send(b2(0x1A00, 3, 0)); send(a(0x1A04, 0)); ancOn = false; adaptiveOn = false; }
             customBlock.setVisibility(idx == 1 ? View.VISIBLE : View.GONE);
+            Widgets.setNoise(this, idx);
         });
         c.addView(noise.view);
 
@@ -296,20 +296,16 @@ public class MainActivity extends Activity {
 
         // Smart Control Plus presets (app-side; the headset only stores the curve).
         // Values from omarchy-momentum4 presets.json, checked against our own capture 2.
+        // Plus up to 5 custom presets saved on the phone (long-press a custom one to rename, overwrite or delete).
         android.widget.HorizontalScrollView hs = new android.widget.HorizontalScrollView(this);
         hs.setHorizontalScrollBarEnabled(false);
-        LinearLayout chips = new LinearLayout(this);
-        for (int i = 0; i < PRESET_NAMES.length; i++) {
-            final int idx = i;
-            Button b = outlineBtn(PRESET_NAMES[i], v -> applyPreset(idx));
-            gate(b);
-            presetBtns[i] = b;
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, dp(40));
-            lp.rightMargin = dp(6);
-            chips.addView(b, lp);
-        }
-        hs.addView(chips);
+        presetChips = new LinearLayout(this);
+        hs.addView(presetChips);
         c.addView(hs);
+        Button save = textBtn("Save current curve as a custom preset", v -> saveCustomDialog());
+        gate(save);
+        c.addView(save);
+        rebuildPresetChips();
 
         for (int i = 0; i < 5; i++) {
             final int band = i;
@@ -332,19 +328,84 @@ public class MainActivity extends Activity {
         markPreset();
     }
 
-    private void applyPreset(int idx) {
-        for (int b = 0; b < 5; b++) { send(b2(0x1001, b, PRESETS[idx][b])); setEq(b, PRESETS[idx][b]); }
+    private void applyPreset(Presets.Preset p) {
+        for (byte[] f : Presets.frames(p.gains)) send(f);
+        for (int b = 0; b < 5; b++) setEq(b, p.gains[b]);
+    }
+
+    private void rebuildPresetChips() {
+        presetChips.removeAllViews();
+        gated.removeAll(presetBtns);
+        presetBtns.clear();
+        for (Presets.Preset p : Presets.all(this)) {
+            Button b = outlineBtn(p.slot < 0 ? p.name : "★ " + p.name, v -> applyPreset(p));
+            if (p.slot >= 0) b.setOnLongClickListener(v -> { manageCustomDialog(p); return true; });
+            boolean on = out != null;
+            b.setEnabled(on); b.setAlpha(on ? 1f : 0.4f);
+            gate(b);
+            presetBtns.add(b);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, dp(40));
+            lp.rightMargin = dp(6);
+            presetChips.addView(b, lp);
+        }
+        markPreset();
     }
 
     /** Highlight the preset whose curve matches exactly, like Smart Control does. */
     private void markPreset() {
-        for (int i = 0; i < PRESETS.length; i++) {
-            if (presetBtns[i] == null) continue;
-            boolean m = java.util.Arrays.equals(PRESETS[i], eqGain);
-            presetBtns[i].setBackground(rounded(m ? ACCENT : CARD, 10, m ? 0 : DIVIDER, 1));
-            presetBtns[i].setTextColor(m ? Color.WHITE : TEXT);
+        if (presetChips == null) return;
+        int m = Presets.matching(this, eqGain);
+        for (int i = 0; i < presetBtns.size(); i++) {
+            boolean sel = i == m;
+            presetBtns.get(i).setBackground(rounded(sel ? ACCENT : CARD, 10, sel ? 0 : DIVIDER, 1));
+            presetBtns.get(i).setTextColor(sel ? Color.WHITE : TEXT);
         }
+        Widgets.setEqIdx(this, m);
     }
+
+    private void saveCustomDialog() {
+        String[] slots = new String[Presets.CUSTOM_SLOTS];
+        int firstFree = -1;
+        for (int i = 0; i < slots.length; i++) {
+            Presets.Preset p = Presets.custom(this, i);
+            slots[i] = "Slot " + (i + 1) + ": " + (p == null ? "(empty)" : p.name);
+            if (p == null && firstFree < 0) firstFree = i;
+        }
+        final int[] chosen = {firstFree < 0 ? 0 : firstFree};
+        EditText name = new EditText(this);
+        name.setHint("Name, e.g. Commute");
+        name.setSingleLine(true);
+        new AlertDialog.Builder(this)
+                .setTitle("Save custom preset")
+                .setView(name)
+                .setSingleChoiceItems(slots, chosen[0], (d, w) -> chosen[0] = w)
+                .setPositiveButton("Save", (d, w) -> {
+                    Presets.saveCustom(this, chosen[0], name.getText().toString(), eqGain.clone());
+                    rebuildPresetChips();
+                    Widgets.refresh(this);
+                    toast("Saved in slot " + (chosen[0] + 1));
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void manageCustomDialog(Presets.Preset p) {
+        EditText name = new EditText(this);
+        name.setText(p.name);
+        name.setSingleLine(true);
+        new AlertDialog.Builder(this)
+                .setTitle("Custom preset " + (p.slot + 1))
+                .setView(name)
+                .setPositiveButton("Rename", (d, w) -> { Presets.saveCustom(this, p.slot, name.getText().toString(), p.gains); rebuildPresetChips(); Widgets.refresh(this); })
+                .setNeutralButton("Overwrite with current curve", (d, w) -> { Presets.saveCustom(this, p.slot, name.getText().toString(), eqGain.clone()); rebuildPresetChips(); Widgets.refresh(this); })
+                .setNegativeButton("Delete", (d, w) -> { Presets.deleteCustom(this, p.slot); rebuildPresetChips(); Widgets.refresh(this); })
+                .show();
+    }
+
+    boolean isLinked() { return out != null; }
+
+    /** Used by widgets/tiles while the app holds the link. */
+    void sendFrame(byte[] frame) { send(frame); }
 
     private View listeningCard() {
         LinearLayout c = card("LISTENING");
@@ -750,6 +811,7 @@ public class MainActivity extends Activity {
         int idx = !ancOn ? 2 : adaptiveOn ? 0 : 1;
         noise.select(idx, false);
         customBlock.setVisibility(idx == 1 ? View.VISIBLE : View.GONE);
+        Widgets.setNoise(this, idx);
     }
 
     private static String ascii(byte[] p) {
@@ -855,6 +917,7 @@ public class MainActivity extends Activity {
     }
 
     private void setConnected(boolean on) {
+        live = on ? this : null;
         statusPill.setText(on ? "Connected" : "Disconnected");
         statusPill.setTextColor(on ? Color.WHITE : TEXT2);
         statusPill.setBackground(rounded(on ? ACCENT : DIVIDER, 12, 0, 0));
@@ -977,5 +1040,5 @@ public class MainActivity extends Activity {
     private int dp(float v) { return Math.round(v * getResources().getDisplayMetrics().density); }
 
     @Override
-    protected void onDestroy() { closeQuietly(); sender.shutdown(); super.onDestroy(); }
+    protected void onDestroy() { if (live == this) live = null; closeQuietly(); sender.shutdown(); super.onDestroy(); }
 }
