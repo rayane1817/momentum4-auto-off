@@ -13,7 +13,9 @@ Tested against a real headset on Windows 10 with Python 3.12 (22 Oct 2026): `ver
 ```
 python gaia_client.py verify
 ```
-Expected: `connected on RFCOMM channel 15` then `<- 0495:0701 resp [00 00 3C] => auto power-off = 60 s`. If you see that, the link and the framing work.
+First time: put your headphones' Bluetooth address (Windows Settings > Bluetooth > the headphones > Properties) on the first line of `windows-client/m4_addr.txt`. That file is git-ignored. Or set `M4_ADDR`, or pass `--addr`.
+
+Expected: `connected on RFCOMM channel found by GAIA UUID` (Windows) then `<- 0495:0701 resp [00 00 3C] => auto power-off = 60 s`. If you see that, the link and the framing work.
 
 Other reads:
 ```
@@ -44,14 +46,14 @@ Worst realistic outcome of a sweep: a "ship/transport mode" that needs a USB cha
 
 ## Options
 ```
---addr AA:BB:CC:DD:EE:FF   headset MAC (default: Ryane's M4, from the capture)
+--addr AA:BB:CC:DD:EE:FF   headset MAC (default: $M4_ADDR, then windows-client/m4_addr.txt)
 --channel N                force an RFCOMM channel, skip SDP
 --log DIR                  where to write logs (default ./logs)
 ```
 
 ## How it connects
-It looks up the GAIA channel by SDP if pybluez is installed, otherwise it uses channel 15 (from the capture). It never tries other channels: GAIA frames on another RFCOMM service (e.g. iAP2) can switch a headset off. Every attempt and every frame, in and out, is timestamped in the log under `logs/`.
+It finds the GAIA channel by its service UUID (Windows) or by SDP (pybluez). It never guesses a channel, not even 15, unless you pass `--channel`: GAIA frames on another RFCOMM service (e.g. iAP2) can switch a headset off. Every attempt and every frame, in and out, is timestamped in the log under `logs/`.
 
 ## Windows notes
-- Stock Windows Python has no `socket.AF_BLUETOOTH`, so on Windows the client opens RFCOMM through the Microsoft Bluetooth stack (WinSock `AF_BTH`) with ctypes. It connects by the GAIA service UUID and lets Windows find the channel by SDP; `--channel` is only a fallback. No packages needed (`pybluez2` does not install on Python 3.12 anyway).
+- Stock Windows Python has no `socket.AF_BLUETOOTH`, so on Windows the client opens RFCOMM through the Microsoft Bluetooth stack (WinSock `AF_BTH`) with ctypes. It connects by the GAIA service UUID and lets Windows find the channel by SDP; `--channel` is the only way to force a raw channel number. No packages needed (`pybluez2` does not install on Python 3.12 anyway).
 - If Windows keeps auto-reconnecting the audio profile and the control channel won't open, unpair the headset from any other nearby device first.

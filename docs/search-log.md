@@ -2,7 +2,7 @@
 
 One entry per sweep or probe run against the real headset. Scope and safety rules: docs/protocol.md, "Power-off search: candidate list".
 
-Setup for all runs below: Sennheiser MOMENTUM 4 (M4AEBT SE, hw 4, fw 3.38.3), MAC 80:C3:BA:4D:6A:24, paired to a Windows 10 PC (Intel Wireless Bluetooth). Client: windows-client/gaia_client.py, Python 3.12.10. Smart Control Plus force-stopped on the phone.
+Setup for all runs below: Sennheiser MOMENTUM 4 (M4AEBT SE, hw 4, fw 3.38.3), MAC XX:XX:XX:XX:6A:24, paired to a Windows 10 PC (Intel Wireless Bluetooth). Client: windows-client/gaia_client.py, Python 3.12.10. Smart Control Plus force-stopped on the phone.
 
 ## 22 Oct 2026 23:09, verify and baseline
 - `verify`: connected, `0495:0701 resp [00 00 3C]` => timer 0 = 60 s (left from T4b).

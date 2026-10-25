@@ -2,6 +2,13 @@
 
 Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control channel (RFCOMM, UUID `a2129ff3-081b-4c45-8afe-469d9c4842ec`) and sends single commands. No internet permission, no libraries, Bluetooth only.
 
+## v0.11.1: review fixes (PR #23) + the 5 review proposals
+- From the first code review: error replies are no longer shown as values; rotating during Connect can't leave a hidden link; no guard crash or double guard after a quick Stop/Start; the app now also blocks rename (`1500`).
+- **The guard comes back by itself** if Android kills the app while it runs (Samsung's memory manager), using the saved headphones and time.
+- **Rotating the phone or folding/unfolding no longer drops the connection.** Switching dark mode still restarts the screen and needs a Connect.
+- The guard notification updates only when something changes ("In use: audio or a call" / "Idle. Switches off in N min"), not every 15 seconds.
+- PC client: your headphones' address is no longer in the code (use `windows-client/m4_addr.txt`, `M4_ADDR` or `--addr`), and it never falls back to a guessed channel 15.
+
 ## v0.11.0: design v2 + the retest findings
 - Everything in v0.10.5 (new look, dark mode) plus:
 - The guard panel says which device it will switch off, and warns in red when the selected device is not a MOMENTUM 4 (a saved TV made widgets fail silently in the retest). Start guard asks before guarding a non-MOMENTUM device.

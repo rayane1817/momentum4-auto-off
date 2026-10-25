@@ -55,12 +55,20 @@ public class AutoOffService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (running) return START_STICKY;
-        if (intent == null) {          // sticky restart after the process was killed: no address, don't crash
-            stopSelf();
-            return START_NOT_STICKY;
+        String addr;
+        long timeout;
+        if (intent == null) {
+            // Sticky restart after Android killed the process while the guard ran (e.g. Samsung MARS):
+            // resume with the saved device and time instead of silently leaving the headphones on.
+            android.content.SharedPreferences p = getSharedPreferences("m4", MODE_PRIVATE);
+            addr = p.getString("dev", "");
+            timeout = p.getInt("minutes", 15) * 60_000L;
+            if (addr.isEmpty()) { stopSelf(); return START_NOT_STICKY; }
+            log("guard resumed after the app was killed");
+        } else {
+            addr = intent.getStringExtra(EXTRA_ADDR);
+            timeout = intent.getLongExtra(EXTRA_TIMEOUT_MS, 15 * 60_000L);
         }
-        String addr = intent.getStringExtra(EXTRA_ADDR);
-        long timeout = intent.getLongExtra(EXTRA_TIMEOUT_MS, 15 * 60_000L);
         Notification n = buildNotification("Watching for idle...");
         if (Build.VERSION.SDK_INT >= 29) {
             startForeground(NOTIF_ID, n, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
@@ -88,7 +96,9 @@ public class AutoOffService extends Service {
 
                 String s = String.format(Locale.ROOT, "music=%s call=%s idle=%dm%02ds",
                         music, inCall, idleMs / 60000, (idleMs / 1000) % 60);
-                status(s);
+                appendLog(s);                       // full detail in the guard log every poll, as before
+                long left = Math.max(0, timeout - idleMs);
+                notifyText(inUse ? "In use: audio or a call" : "Idle. Switches off in " + ((left + 59_999) / 60_000) + " min");
 
                 if (idleMs >= timeout) {
                     log("idle timeout reached, sending power-off");
@@ -174,17 +184,29 @@ public class AutoOffService extends Service {
 
     private void status(String s) {
         appendLog(s);
-        NotificationManager nm = getSystemService(NotificationManager.class);
-        if (nm != null) nm.notify(NOTIF_ID, buildNotification(s));
+        notifyText(s);
     }
 
+    private String lastNotif;
+
+    /** Redraw the ongoing notification only when its text changes (was every 15 s poll). */
+    private void notifyText(String text) {
+        if (text.equals(lastNotif)) return;
+        lastNotif = text;
+        NotificationManager nm = getSystemService(NotificationManager.class);
+        if (nm != null) nm.notify(NOTIF_ID, buildNotification(text));
+    }
+
+    private static volatile boolean channelReady;
+
     private Notification buildNotification(String text) {
-        if (Build.VERSION.SDK_INT >= 26) {
+        if (Build.VERSION.SDK_INT >= 26 && !channelReady) {   // create once, not on every update
             NotificationManager nm = getSystemService(NotificationManager.class);
             if (nm.getNotificationChannel(CHANNEL) == null) {
                 nm.createNotificationChannel(new NotificationChannel(
                         CHANNEL, "Auto power-off", NotificationManager.IMPORTANCE_LOW));
             }
+            channelReady = true;
         }
         Notification.Builder b = Build.VERSION.SDK_INT >= 26
                 ? new Notification.Builder(this, CHANNEL) : new Notification.Builder(this);

@@ -241,7 +241,7 @@ A, afterwards:
    git diff --cached -U0 | grep -nE '([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}' && echo "MAC FOUND: unstage" || echo ok
    git diff --cached --name-only | grep -iE 'btsnoop|bugreport|\.cfa$|\.zip$|\.png$|ui.*\.xml$|dumpsys' && echo "RAW FILE: unstage" || echo ok
    ```
-   Note: `gaia_client.py` and its README already contain the headset MAC as `DEFAULT_ADDR`. Don't add more copies. Flag it in the PR for Ryane to decide.
+   Note: since v0.11.1 the headset MAC is not in the code. Put it on the first line of `windows-client/m4_addr.txt` (git-ignored) or set `M4_ADDR`, or pass `--addr`. Without `--channel` the client only connects by GAIA UUID / SDP (no channel-15 fallback); pass `--channel 15` only if you know it.
 5. `git push -u origin local/v08-validation-<yyyymmdd>`, then `gh pr create` with the handback body below.
 
 **Handback to the cloud session = the PR description**, with:
