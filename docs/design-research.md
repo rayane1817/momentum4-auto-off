@@ -35,6 +35,14 @@ Every claim is tagged:
 - Visual identity: monochrome base, a dot-matrix display face (Ndot) used only for product names and numbers, red as a single accent. [claimed: [brand analysis](https://madegooddesigns.com/nothing-brand-guidelines/), sources disagree on how much red]
 - Takeaway [opinion]: the strongest lesson is the **two-level EQ** (Simple presets first, Advanced behind it) and a **display face used sparingly**, only where it carries meaning (numbers, names).
 
+### 1b. Nothing X, closer look (added 25 Oct 2026 for design v3)
+- Home: "On the main screen, you should see some tiles. Tap the 'Equalizer' tile to open the preset menu." The preset menu has "an odd radar-looking adjustment panel, and some presets"; the advanced tool is a "parametric equalizer". [verified: [SoundGuys EQ presets](https://www.soundguys.com/what-do-all-the-nothing-headphone-1-eq-presets-sound-like-140790/)]
+- Described as "Minimalist design and easy navigation", "clean and fluid"; features: ANC level, transparency, gesture controls, find my headphones, low-latency mode. [verified: [NothingTec](https://nothingtec.com/en/2025/01/20/que-puedes-hacer-con-la-app-nothing-x/), a fan blog]
+- Battery per earbud and case on the main screen. [claimed: app listings via search summary]
+- Nothing's web design system (third-party capture): strictly monochrome, no accent colour, uppercase monospace for labels and buttons, dot-matrix face only for product names, 6-8 px radii, no shadows. [verified: [shadcn.io capture of nothing.tech](https://www.shadcn.io/design/nothing/raw); describes the website, not the app]
+- Not verified: exact current Nothing X home layout (no screenshots read). The v3 structure follows the verified "tiles open sub-screens" pattern, not a pixel copy.
+- Takeaway [opinion]: Nothing's simplicity comes from **few things on the first screen**, **one type voice for numbers**, and **no colour except one interrupt**. All three transfer to the M4 app without copying Nothing's fonts or marks.
+
 ### AirPods settings on iOS
 - Noise control lives in two places: Control Center (hold the volume slider, then the Noise Control button) and Settings. Adaptive combines ANC and Transparency and adjusts by itself. You choose which modes the stem press cycles through. [claimed: [Apple support guide](https://support.apple.com/is-is/guide/airpods/switch-between-noise-control-modes-dev9812f5cc3/1.0/web/1.0), via search summary]
 - iOS 18 added a slider for Adaptive from "Less Noise" to "More Noise". [claimed: MacRumors via search summary]
