@@ -113,7 +113,7 @@ public class AutoOffService extends Service {
         } catch (Throwable t) {
             log("guard crashed: " + t);
         } finally {
-            running = false;
+            if (!stop) running = false;   // when stopped, onDestroy already cleared it; a newer guard may be running now
             stopForeground(true);
             stopSelf();
             log("guard stopped");
