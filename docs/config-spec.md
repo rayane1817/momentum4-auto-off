@@ -118,9 +118,9 @@ Details: `captures/capture3_scp_writes_redacted.md`. PC checks: `windows-client/
 - **Comfort call `0814 [0/1]`**: confirmed (SCP sends it, readback `0815`), not inverted, no notification.
 - **Touch controls `1606 [0/1]`**: confirmed, inverted (01 = off, SCP shows "Commandes: Désactivé"), notification `1687`.
 - **Auto power-off "Never"** = `0600 [00 00 00]`. In SCP the tile (like Smart Pause and auto-answer) is disabled while on-head detection is off.
-- **`1003`** (EQ all gains, omarchy) answers error 05 with an empty payload on 3.38.3. Not retried.
+- **`1003`** (EQ all gains, omarchy): empty payload -> error 05 (T15); **`1003 [00]` -> 5 gains, equal to `1002 [0..4]`** (T22).
 - **No notification** on 3.38.3 for `0805` (call transparency), `0814`, `080C`, `080A`. Notifications seen: `1A81/1A83/1A85`, `1082`, `1089`, `0884`, `0898`, `1687`.
-- `1407` read `01` at session start, through Hi-Res toggles, and after a full power cycle (T21): not a pending flag that a restart clears. Meaning unknown.
+- `1407` read `01` at session start, through Hi-Res toggles, and after a full power cycle (T21): not a pending flag that a restart clears on Ryane's M4 (contradicts omarchy / docs/scp-static.md). Don't drive a "Restart needed" hint from it yet.
 - **Hi-Res `0405` persists across a power cycle** (T21: set on, guard power-off, button on, `0406 = 00`).
 - `0803 [00 00]` was refused once with error `0x80` right after a restart (value already `00 00`); accepted in T15.
 - **Disconnect**: SCP sends `1403 [index]` (T19), see Connection management above.

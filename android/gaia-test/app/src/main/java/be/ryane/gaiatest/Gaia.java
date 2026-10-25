@@ -67,7 +67,7 @@ final class Gaia {
         if (vendor == SENNHEISER) {
             if (cmd == 0x0040) return "factory reset";
             if (feature == 1) return "feature 1 = firmware update / DFU mode";
-            if (cmd == 0x1405 || cmd == 0x1406) return "deletes paired devices";
+            if (cmd == 0x1403 || cmd == 0x1405 || cmd == 0x1406) return "deletes paired devices";
             if (cmd == 0x0607 || (cmd >= 0x0609 && cmd <= 0x06FF)) return "reset commands next to power-off";
         }
         if (vendor == QUALCOMM && feature == 6) return "Qualcomm upgrade feature";
@@ -146,6 +146,9 @@ final class Gaia {
             case 0x0401: return "on-head detection " + onOff(b0);
             case 0x1009: return "bass boost " + onOff(b0);
             case 0x0804: return "speech clarity " + (p.length >= 2 && u16(p, 0) == 2 ? "ON" : "off");
+            case 0x1607: return "touch controls " + (b0 == 0 ? "ON" : b0 == 1 ? "off" : "?(" + b0 + ")");   // inverted
+            case 0x1407: return "restart pending = " + b0 + (b0 == 1 ? " (restart needed)" : "");
+            case 0x1003:
             case 0x1002:                                                            // 1082 notif = 5 gains, 1102 resp = 1 gain
                 StringBuilder e = new StringBuilder("EQ dB:");
                 for (byte x : p) e.append(' ').append(x / 10.0);

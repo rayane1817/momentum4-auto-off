@@ -80,7 +80,7 @@ COMMANDS = {
     0x1001: _c("EQ band set", "set", 0x1001, [(("u8", 0, 4), ("s8", -60, 60))], "capture2", "confirmed",
                get_for=0x1002),
     0x1002: _c("EQ band get", "get", 0x1002, [(("u8", 0, 4),)], "capture2", "confirmed", notif=0x1082),
-    0x1003: _c("EQ all gains get", "get", 0x1003, EMPTY, "omarchy", "claimed"),
+    0x1003: _c("EQ all gains get", "get", 0x1003, [(("const", 0),)], "omarchy", "claimed"),   # empty payload -> error 05 (T15)
     0x1008: _c("bass boost set", "set", 0x1008, BOOL, "capture2", "confirmed", get_for=0x1009),
     0x1009: _c("bass boost get", "get", 0x1009, EMPTY, "capture2", "confirmed", notif=0x1089),
     # ---- feature 9: product info
@@ -117,7 +117,7 @@ SEEN_LABELS = {
     0x2005: "feature 16, seen at connect", 0x2007: "feature 16, seen at connect",
     0x2081: "feature 16 notif", 0x2601: "feature 19, seen at connect",
     0x1402: "device connect [idx]", 0x1405: "BLOCKED device delete/disconnect [idx]",
-    0x1403: "BLOCKED device disconnect [idx] (T19; SCP sends it, pairing kept)", 0x1484: "device list status notif [idx, state]", 0x1406: "BLOCKED delete pairing list",
+    0x1403: "BLOCKED device disconnect/delete [idx] (T19: SCP disconnect, pairing kept; omarchy: lost a pairing)", 0x1484: "device list status notif [idx, state]", 0x1406: "BLOCKED delete pairing list",
     0x0040: "BLOCKED factory reset",
     0x1800: "feature 12 SET seen from SCP (auto-pause in transparency?), unconfirmed",
     0x1801: "feature 12 GET seen at connect", 0x1805: "transparency get (seen at connect)",
@@ -130,7 +130,7 @@ SNAPSHOT_GETS = [
     ("0802", 0x0802, b""), ("0804", 0x0804, b""), ("0806", 0x0806, b""), ("0807", 0x0807, b""),
     ("080B", 0x080B, b""), ("080D", 0x080D, b""), ("0815", 0x0815, b""), ("0818", 0x0818, b""),
 ] + [("1002/%02X" % b, 0x1002, bytes([b])) for b in range(5)] + [
-    ("1003", 0x1003, b""), ("1009", 0x1009, b""),
+    ("1003/00", 0x1003, b"\x00"), ("1009", 0x1009, b""),
     ("1A01", 0x1A01, b""), ("1A03", 0x1A03, b""), ("1A05", 0x1A05, b""),
     ("1607", 0x1607, b""), ("1407", 0x1407, b""),
     ("1200", 0x1200, b""), ("1201", 0x1201, b""), ("1206", 0x1206, b""),

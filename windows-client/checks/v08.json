@@ -85,10 +85,10 @@
    ],
    "restore": [{"set": ["1001", "00 {eq0}"]}]},
 
-  {"id": "7", "label": "EQ all-gains read 1003 (claimed; error 05 on 3.38.3, T15)",
+  {"id": "7", "label": "EQ all-gains read 1003 [00] (omarchy; empty payload = error 05, T15)",
    "save": {"e0": ["1002", "00"], "e1": ["1002", "01"], "e2": ["1002", "02"], "e3": ["1002", "03"], "e4": ["1002", "04"]},
    "actions": [
-    {"get": ["1003"], "expect": "{e0} {e1} {e2} {e3} {e4}"}
+    {"get": ["1003", "00"], "expect": "{e0} {e1} {e2} {e3} {e4}"}
    ]},
 
   {"id": "8", "label": "bass boost toggle",
