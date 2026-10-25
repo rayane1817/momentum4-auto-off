@@ -54,7 +54,7 @@ final class Widgets {
         Remote.send(c, Remote.noiseFrames(mode), attempts, (ok, msg) -> {
             if (ok) setNoise(c, mode);
             if (after != null) after.run();
-            if (!ok) toast(c, "Noise control: " + msg);
+            if (!ok) toast(c, failText(c, msg));
         });
     }
 
@@ -67,7 +67,7 @@ final class Widgets {
         Remote.send(c, Presets.frames(p.gains), attempts, (ok, msg) -> {
             if (ok) setEqIdx(c, next);
             if (after != null) after.run();
-            if (!ok) toast(c, "EQ: " + msg);
+            if (!ok) toast(c, failText(c, msg));
         });
     }
 
@@ -79,6 +79,12 @@ final class Widgets {
         Runnable finish = Watchdog.once(pr::finish);
         Watchdog.runAfter(Remote.WIDGET_DEADLINE_MS, finish);
         return finish;
+    }
+
+    /** Short enough for a 2-line Samsung toast, and names the device it tried (T35 finding). */
+    static String failText(Context c, String msg) {
+        if (Remote.BUSY_OR_OFF.equals(msg)) return "Can't reach " + prefs(c).getString("devName", "the headphones") + ". Are they on?";
+        return msg;
     }
 
     static void toast(Context c, String m) { Toast.makeText(c.getApplicationContext(), m, Toast.LENGTH_SHORT).show(); }
