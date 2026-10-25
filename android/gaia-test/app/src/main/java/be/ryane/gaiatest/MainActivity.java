@@ -26,6 +26,7 @@ import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
@@ -71,6 +72,7 @@ public class MainActivity extends Activity {
     private static final String[] EQ_BANDS = {"63 Hz", "250 Hz", "1 kHz", "4 kHz", "8 kHz"};
     private final SeekBar[] eqSeek = new SeekBar[5];
     private final int[] eqGain = new int[5];                     // current curve, dB x 10
+    private final EqSync eqSync = new EqSync();                  // eqGain mirrors the headset?
     private LinearLayout presetChips;
     private final List<Button> presetBtns = new ArrayList<>();
     /** The app instance holding the GAIA link, used by widgets/tiles to send through it. */
@@ -101,7 +103,7 @@ public class MainActivity extends Activity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(BG);
+        root.setBackgroundColor(CARD);                            // shows behind the status bar, like the header
         root.addView(header());
 
         LinearLayout content = new LinearLayout(this);
@@ -117,9 +119,11 @@ public class MainActivity extends Activity {
         content.addView(logCard());
 
         ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(BG);
         scroll.addView(content);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
         setContentView(root);
+        padForSystemBars(root);
 
         setConnected(false);
         swAutoStart.setChecked(prefs.getBoolean("autostart", false));
@@ -168,6 +172,28 @@ public class MainActivity extends Activity {
     }
 
     // ---------------------------------------------------------------- views
+
+    /**
+     * targetSdk 35 draws edge to edge on Android 15+: without this the header (status pill,
+     * device picker, Rescan) sits under the status bar. The status bar strip takes the header's
+     * colour; the keyboard also pushes the content up (fields in Advanced and the guard card).
+     */
+    private void padForSystemBars(View root) {
+        root.setOnApplyWindowInsetsListener((v, insets) -> {
+            int l, t, r, b;
+            if (Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets i = insets.getInsets(WindowInsets.Type.systemBars()
+                        | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
+                l = i.left; t = i.top; r = i.right; b = i.bottom;
+            } else {
+                l = insets.getSystemWindowInsetLeft(); t = insets.getSystemWindowInsetTop();
+                r = insets.getSystemWindowInsetRight(); b = insets.getSystemWindowInsetBottom();
+            }
+            v.setPadding(l, t, r, b);
+            return Build.VERSION.SDK_INT >= 30 ? WindowInsets.CONSUMED : insets.consumeSystemWindowInsets();
+        });
+        root.requestApplyInsets();
+    }
 
     private View header() {
         LinearLayout h = new LinearLayout(this);
@@ -289,7 +315,9 @@ public class MainActivity extends Activity {
         LinearLayout c = card("EQUALIZER");
         LinearLayout titleRow = (LinearLayout) ((ViewGroup) c.getParent()).getChildAt(0);
         Button flat = textBtn("Flat", v -> {
-            for (int i = 0; i < 5; i++) { send(b2(0x1001, i, 0)); setEq(i, 0); }
+            for (int i = 0; i < 5; i++) send(b2(0x1001, i, 0));
+            eqSync.curveWritten();
+            setCurve(new int[5]);
         });
         gate(flat);
         titleRow.addView(flat);
@@ -328,9 +356,26 @@ public class MainActivity extends Activity {
         markPreset();
     }
 
+    /** All five bands at once, then one preset match (no half-updated curve reaches the widgets). */
+    private void setCurve(int[] gainsX10) {
+        for (int b = 0; b < 5; b++) {
+            eqGain[b] = gainsX10[b];
+            eqSeek[b].setProgress(Math.max(0, Math.min(120, gainsX10[b] + 60)));
+        }
+        markPreset();
+    }
+
+    private void setCurve(byte[] payload) {
+        int[] g = new int[5];
+        for (int b = 0; b < 5; b++) g[b] = payload[b];
+        eqSync.curveRead();
+        setCurve(g);
+    }
+
     private void applyPreset(Presets.Preset p) {
         for (byte[] f : Presets.frames(p.gains)) send(f);
-        for (int b = 0; b < 5; b++) setEq(b, p.gains[b]);
+        eqSync.curveWritten();
+        setCurve(p.gains);
     }
 
     private void rebuildPresetChips() {
@@ -360,7 +405,7 @@ public class MainActivity extends Activity {
             presetBtns.get(i).setBackground(rounded(sel ? ACCENT : CARD, 10, sel ? 0 : DIVIDER, 1));
             presetBtns.get(i).setTextColor(sel ? Color.WHITE : TEXT);
         }
-        Widgets.setEqIdx(this, m);
+        if (eqSync.mayPublish()) Widgets.setEqIdx(this, m);
     }
 
     private void saveCustomDialog() {
@@ -792,10 +837,10 @@ public class MainActivity extends Activity {
             case 0x0804: if (f.type() != 3 && f.payload.length >= 2) swSpeech.setChecked(Gaia.u16(f.payload, 0) == 2); break;
             case 0x0815: if (f.type() != 3 && b0 >= 0) swComfort.setChecked(b0 == 1); break;
             case 0x1607: if (f.type() != 3 && b0 >= 0) swTouch.setChecked(b0 == 0); break;   // inverted
-            case 0x1003: if (f.type() == 2 && f.payload.length >= 5) for (int i = 0; i < 5; i++) setEq(i, f.payload[i]); break;
+            case 0x1003: if (f.type() == 2 && f.payload.length >= 5) setCurve(f.payload); break;
             case 0x1002:                                                     // 1082 notif = all 5 bands, 1102 resp = one band
                 if (f.type() == 1 && f.payload.length >= 5) {
-                    for (int i = 0; i < 5; i++) setEq(i, f.payload[i]);
+                    setCurve(f.payload);
                 } else if (f.type() == 2 && f.payload.length >= 1) {
                     Integer band = pendingBands.poll();
                     if (band != null) setEq(band, f.payload[0]);
@@ -918,6 +963,7 @@ public class MainActivity extends Activity {
 
     private void setConnected(boolean on) {
         live = on ? this : null;
+        if (!on) eqSync.disconnected();
         statusPill.setText(on ? "Connected" : "Disconnected");
         statusPill.setTextColor(on ? Color.WHITE : TEXT2);
         statusPill.setBackground(rounded(on ? ACCENT : DIVIDER, 12, 0, 0));

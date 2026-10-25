@@ -1,0 +1,4 @@
+{"name": "v010_read", "about": "v0.10 run: read-only PC readback of the values the app, widgets and tiles change (no writes).",
+ "register": false,
+ "steps": [{"id": "R", "label": "readback",
+  "actions": [{"get": ["0815"]}, {"get": ["1607"]}, {"get": ["1A05"]}, {"get": ["1A01"]}, {"get": ["1A03"]}, {"get": ["1003", "00"]}]}]}
