@@ -3,7 +3,7 @@
 Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control channel (RFCOMM, UUID `a2129ff3-081b-4c45-8afe-469d9c4842ec`) and sends single commands. No internet permission, no libraries, Bluetooth only.
 
 ## Install (Samsung)
-1. On the phone, open this repo on GitHub, go to `android/gaia-test/release/` and download the latest `m4-gaia-test-*.apk` (currently 0.10), or grab it from the Releases page.
+1. On the phone, open this repo on GitHub, go to `android/gaia-test/release/` and download the latest `m4-gaia-test-*.apk` (currently 0.10.1), or grab it from the Releases page.
 2. Open it. Samsung asks to allow installs from that app (Chrome / My Files): allow once.
 3. Google Play Protect may warn about an unknown app: "Install anyway". It's our own debug-signed build.
 
@@ -12,6 +12,12 @@ Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control cha
 2. Headphones on and connected to the phone as usual.
 3. Open "M4 GAIA test", allow "Nearby devices", pick the MOMENTUM 4, tap Connect.
 4. Tap the buttons, then "Copy log" and paste the log in the chat.
+
+## v0.10.1 (fixes from the v0.10 hardware run, PR #15)
+- **Widget tap with the headphones off no longer freezes and kills the app.** A widget now tries once, gives up after 4.5 s and shows "Headphones busy or off". Quick Settings tiles retry once and stay greyed at most about 10 s.
+- **Opening the app no longer resets the EQ widget and tile to "Neutral".** They only follow the app once it has read the curve from the headphones.
+- **Header visible again on Android 15+**: no more title bar, and the status pill, device picker and Rescan sit below the status bar.
+- Installs over v0.10 (same key). Not yet tested on the headset: see `docs/local-test-v0.10.1.md`.
 
 ## v0.10: widgets, Quick Settings tiles, custom presets
 - **Home-screen widgets** (long-press the home screen > Widgets > M4 GAIA test):

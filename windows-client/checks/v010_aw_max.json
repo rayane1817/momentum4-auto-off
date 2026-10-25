@@ -1,0 +1,4 @@
+{"name": "v010_aw_max", "about": "v0.10 run B1: PC sets anti-wind wire 1 (= Max, T17) in Custom mode; the app must then show Max.",
+ "register": false,
+ "steps": [{"id": "AW1", "label": "Custom + anti-wind [01 01]",
+  "actions": [{"set": ["1A00", "01 01"]}, {"get": ["1A01"], "expect": "01 01 02 ?? 03 00"}]}]}

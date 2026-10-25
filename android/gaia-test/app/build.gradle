@@ -7,8 +7,8 @@ android {
         applicationId 'be.ryane.gaiatest'
         minSdk 26
         targetSdk 35
-        versionCode 13
-        versionName '0.10'
+        versionCode 14
+        versionName '0.10.1'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -28,4 +28,8 @@ android {
         release { minifyEnabled false; signingConfig signingConfigs.shared }
         debug { signingConfig signingConfigs.shared }
     }
+}
+
+dependencies {
+    testImplementation 'junit:junit:4.13.2'   // plain JVM tests only (app/src/test), nothing ships in the APK
 }

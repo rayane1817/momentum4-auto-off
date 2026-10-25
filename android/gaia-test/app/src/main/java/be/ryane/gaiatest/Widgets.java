@@ -50,23 +50,36 @@ final class Widgets {
 
     // ---- actions (from widgets and tiles)
 
-    static void applyNoise(Context c, int mode, Runnable after) {
-        Remote.send(c, Remote.noiseFrames(mode), (ok, msg) -> {
-            if (ok) setNoise(c, mode); else toast(c, "Noise control: " + msg);
+    /** attempts: Remote.WIDGET_ATTEMPTS or TILE_ATTEMPTS. after runs before the failure toast. */
+    static void applyNoise(Context c, int mode, int attempts, Runnable after) {
+        Remote.send(c, Remote.noiseFrames(mode), attempts, (ok, msg) -> {
+            if (ok) setNoise(c, mode);
             if (after != null) after.run();
+            if (!ok) toast(c, "Noise control: " + msg);
         });
     }
 
     /** step = +1 next preset, -1 previous. Cycles built-ins then custom presets. */
-    static void stepEq(Context c, int step, Runnable after) {
+    static void stepEq(Context c, int step, int attempts, Runnable after) {
         List<Presets.Preset> all = Presets.all(c);
         int cur = eqIdx(c);
         int next = cur < 0 ? (step > 0 ? 0 : all.size() - 1) : Math.floorMod(cur + step, all.size());
         Presets.Preset p = all.get(next);
-        Remote.send(c, Presets.frames(p.gains), (ok, msg) -> {
-            if (ok) setEqIdx(c, next); else toast(c, "EQ: " + msg);
+        Remote.send(c, Presets.frames(p.gains), attempts, (ok, msg) -> {
+            if (ok) setEqIdx(c, next);
             if (after != null) after.run();
+            if (!ok) toast(c, "EQ: " + msg);
         });
+    }
+
+    /**
+     * Ends a widget click broadcast: on the normal result or at WIDGET_DEADLINE_MS, whichever is
+     * first, so Android never reaches its 10 s ANR limit. A late result still shows its toast.
+     */
+    static Runnable finishInTime(BroadcastReceiver.PendingResult pr) {
+        Runnable finish = Watchdog.once(pr::finish);
+        Watchdog.runAfter(Remote.WIDGET_DEADLINE_MS, finish);
+        return finish;
     }
 
     static void toast(Context c, String m) { Toast.makeText(c.getApplicationContext(), m, Toast.LENGTH_SHORT).show(); }
@@ -121,8 +134,8 @@ final class Widgets {
         @Override public void onUpdate(Context c, AppWidgetManager m, int[] ids) { for (int id : ids) m.updateAppWidget(id, noiseViews(c)); }
         @Override public void onReceive(Context c, Intent i) {
             if (ACT_NOISE.equals(i.getAction())) {
-                BroadcastReceiver.PendingResult pr = goAsync();
-                applyNoise(c, i.getIntExtra(EXTRA_MODE, Remote.NOISE_OFF), pr::finish);
+                Runnable finish = finishInTime(goAsync());
+                applyNoise(c, i.getIntExtra(EXTRA_MODE, Remote.NOISE_OFF), Remote.WIDGET_ATTEMPTS, finish);
             } else super.onReceive(c, i);
         }
     }
@@ -132,8 +145,8 @@ final class Widgets {
         @Override public void onUpdate(Context c, AppWidgetManager m, int[] ids) { for (int id : ids) m.updateAppWidget(id, eqViews(c)); }
         @Override public void onReceive(Context c, Intent i) {
             if (ACT_EQ_STEP.equals(i.getAction())) {
-                BroadcastReceiver.PendingResult pr = goAsync();
-                stepEq(c, i.getIntExtra(EXTRA_STEP, 1), pr::finish);
+                Runnable finish = finishInTime(goAsync());
+                stepEq(c, i.getIntExtra(EXTRA_STEP, 1), Remote.WIDGET_ATTEMPTS, finish);
             } else super.onReceive(c, i);
         }
     }

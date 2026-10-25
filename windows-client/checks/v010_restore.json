@@ -1,0 +1,9 @@
+{"name": "v010_restore", "about": "v0.10 run: restore the session-start state (EQ flat, Adaptive, anti-wind off, level 0, comfort off, touch on).",
+ "register": false,
+ "steps": [{"id": "RS", "label": "restore baseline",
+  "actions": [{"set": ["1001", "00 00"]}, {"set": ["1001", "01 00"]}, {"set": ["1001", "02 00"]}, {"set": ["1001", "03 00"]}, {"set": ["1001", "04 00"]},
+              {"get": ["1003", "00"], "expect": "00 00 00 00 00"},
+              {"set": ["1A00", "03 00"]}, {"set": ["1A04", "01"]}, {"set": ["1A00", "01 00"]}, {"set": ["1A02", "00"]},
+              {"set": ["1A04", "01"]}, {"set": ["1A00", "03 01"]},
+              {"get": ["1A01"], "expect": "01 00 02 00 03 01"}, {"get": ["1A05"], "expect": "01"}, {"get": ["1A03"], "expect": "00"},
+              {"get": ["0815"], "expect": "00"}, {"get": ["1607"], "expect": "00"}]}]}

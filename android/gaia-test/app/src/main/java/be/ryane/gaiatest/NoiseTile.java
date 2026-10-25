@@ -13,7 +13,7 @@ public class NoiseTile extends TileService {
         int next = cur < 0 ? Remote.NOISE_ADAPTIVE : (cur + 1) % 3;
         Tile t = getQsTile();
         if (t != null) { t.setState(Tile.STATE_UNAVAILABLE); t.updateTile(); }
-        Widgets.applyNoise(this, next, this::draw);
+        Widgets.applyNoise(this, next, Remote.TILE_ATTEMPTS, this::draw);
     }
 
     private void draw() {

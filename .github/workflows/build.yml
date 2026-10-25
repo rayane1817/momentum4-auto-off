@@ -1,0 +1,58 @@
+name: Build APK (check)
+
+# Builds the app and runs the JVM unit tests on every pull request that touches it.
+# Uploads the signed APK as a run artifact only: no tag, no Release (release.yml does that).
+
+on:
+  pull_request:
+    paths:
+      - 'android/gaia-test/**'
+      - '!android/gaia-test/release/**'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android/gaia-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+
+      - name: Install SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Unit tests and release APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew testReleaseUnitTest assembleRelease --no-daemon
+
+      - name: Name the APK after the version
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/dist"
+          ver=$(grep -oP "versionName '\K[^']+" app/build.gradle)
+          cp app/build/outputs/apk/release/app-release.apk "${GITHUB_WORKSPACE}/dist/m4-gaia-test-${ver}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m4-gaia-test-apk
+          path: dist/*.apk
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-reports
+          path: android/gaia-test/app/build/reports/tests/
