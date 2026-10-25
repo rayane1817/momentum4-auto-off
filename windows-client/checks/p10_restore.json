@@ -1,0 +1,5 @@
+{"name": "p10_restore", "about": "Phase 10: touch back on, Hi-Res back off (session baseline).",
+ "register": false,
+ "steps": [{"id": "R", "label": "touch on, Hi-Res off",
+  "actions": [{"set": ["1606", "00"]}, {"get": ["1607"], "expect": "00"},
+              {"set": ["0405", "01"]}, {"get": ["0406"], "expect": "01"}, {"get": ["1407"], "optional": true}]}]}

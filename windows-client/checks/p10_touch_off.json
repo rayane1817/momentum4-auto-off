@@ -1,0 +1,5 @@
+{"name": "p10_touch_off", "about": "Phase 10: after the restart, check Hi-Res held (0406 = 00), read 1407, then touch controls off (1606 [01]) for Ryane's tap test.",
+ "register": false,
+ "steps": [{"id": "T", "label": "Hi-Res held across restart; touch off",
+  "actions": [{"get": ["0406"], "expect": "00"}, {"get": ["1407"], "optional": true}, {"get": ["1201"], "expect": "00 03 00 26 00 03"},
+              {"set": ["1606", "01"]}, {"get": ["1607"], "expect": "01"}]}]}

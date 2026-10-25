@@ -108,7 +108,7 @@ On-head detection `0400 [0/1]`, smart pause `080C [0/1]`, auto-answer `080A [0/1
 - **Comfort call**: only the GET (`0815` → `0915 00`) appears; no `0814` write in this capture. Still unconfirmed.
 - **Auto-pause in transparency**: no matching write found.
 - **Voice-prompt language** and the reboot after it go through the Qualcomm upgrade/data-transfer feature (`001D` feature 6). There is no standalone reboot command; it is the upgrade flow's own restart. Not implemented, stays blocked.
-- **Connection management**: connect `1402 [index]`; the app's disconnect action sent `1405 [index]`, which the old app names "delete entry". Kept blocked until it's clear whether it removes the pairing.
+- **Connection management**: connect `1402 [index]`; the app's disconnect action sent `1405 [index]`, which the old app names "delete entry". Kept blocked until it's clear whether it removes the pairing. **Update T19 (25 Oct 2026): SCP 1.6.3's tap on a connected entry sends `1403 [index]` (resp `1503`, notif `1484 [index, 00]`) and only disconnects: pairing kept on phone, PC and headset. `1405` was not reproduced; its meaning stays unknown. `1403`, `1405`, `1406` stay blocked.**
 - Feature 16 (`2001/2003/2005/2007`, notif `2081 00`), `2601` (error), `081A/081D/081E` (error 01 "not supported") are read at connect; meaning unknown.
 
 ## Capture 3 + PC checks (25 Oct 2026, local Windows session, T15-T17)
@@ -120,5 +120,8 @@ Details: `captures/capture3_scp_writes_redacted.md`. PC checks: `windows-client/
 - **Auto power-off "Never"** = `0600 [00 00 00]`. In SCP the tile (like Smart Pause and auto-answer) is disabled while on-head detection is off.
 - **`1003`** (EQ all gains, omarchy) answers error 05 with an empty payload on 3.38.3. Not retried.
 - **No notification** on 3.38.3 for `0805` (call transparency), `0814`, `080C`, `080A`. Notifications seen: `1A81/1A83/1A85`, `1082`, `1089`, `0884`, `0898`, `1687`.
-- `1407` read `01` at session start and stayed `01` through a Hi-Res toggle and restore.
+- `1407` read `01` at session start, through Hi-Res toggles, and after a full power cycle (T21): not a pending flag that a restart clears. Meaning unknown.
+- **Hi-Res `0405` persists across a power cycle** (T21: set on, guard power-off, button on, `0406 = 00`).
+- `0803 [00 00]` was refused once with error `0x80` right after a restart (value already `00 00`); accepted in T15.
+- **Disconnect**: SCP sends `1403 [index]` (T19), see Connection management above.
 - Unknown SET `1800 [0/1]` (resp `1900`, GET `1801`) seen from SCP before this session: feature 12, probably "Pause automatique" in transparency. Unconfirmed.

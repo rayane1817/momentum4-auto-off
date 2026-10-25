@@ -117,7 +117,7 @@ SEEN_LABELS = {
     0x2005: "feature 16, seen at connect", 0x2007: "feature 16, seen at connect",
     0x2081: "feature 16 notif", 0x2601: "feature 19, seen at connect",
     0x1402: "device connect [idx]", 0x1405: "BLOCKED device delete/disconnect [idx]",
-    0x1403: "NEVER: forget device (omarchy)", 0x1406: "BLOCKED delete pairing list",
+    0x1403: "BLOCKED device disconnect [idx] (T19; SCP sends it, pairing kept)", 0x1484: "device list status notif [idx, state]", 0x1406: "BLOCKED delete pairing list",
     0x0040: "BLOCKED factory reset",
     0x1800: "feature 12 SET seen from SCP (auto-pause in transparency?), unconfirmed",
     0x1801: "feature 12 GET seen at connect", 0x1805: "transparency get (seen at connect)",

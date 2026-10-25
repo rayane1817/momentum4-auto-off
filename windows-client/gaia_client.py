@@ -288,7 +288,8 @@ class Link:
             chans.append(sdp)
         if DOC_CHANNEL not in chans:
             chans.append(DOC_CHANNEL)            # documented fallback
-        chans += [c for c in range(1, 31) if c not in chans]   # last resort sweep
+        # No guessed channels: GAIA frames on another RFCOMM service (e.g. iAP2)
+        # powered an ACCENTUM off (docs/protocol.md). Removed the 1-30 sweep.
         return chans
 
     def connect(self, timeout=10.0):
