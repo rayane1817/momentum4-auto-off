@@ -1,0 +1,5 @@
+{"name": "v0101_eq_rock", "about": "v0.10.1 run C4: PC sets the Rock curve (Presets.java) while the app is connected; the app and the EQ widget must follow (1082).",
+ "register": false,
+ "steps": [{"id": "ROCK", "label": "EQ Rock 0/+2.0/+2.5/+1.5/-2.0",
+  "actions": [{"set": ["1001", "00 00"]}, {"set": ["1001", "01 14"]}, {"set": ["1001", "02 19"]}, {"set": ["1001", "03 0F"]}, {"set": ["1001", "04 EC"]},
+              {"get": ["1003", "00"], "expect": "00 14 19 0F EC"}]}]}

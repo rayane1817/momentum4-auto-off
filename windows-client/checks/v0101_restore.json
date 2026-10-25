@@ -1,0 +1,9 @@
+{"name": "v0101_restore", "about": "v0.10.1 run: restore the session-start state (EQ Rock, noise Off with level 100, anti-wind off, comfort off, touch on).",
+ "register": false,
+ "steps": [{"id": "RS", "label": "restore baseline",
+  "actions": [{"set": ["1001", "00 00"]}, {"set": ["1001", "01 14"]}, {"set": ["1001", "02 19"]}, {"set": ["1001", "03 0F"]}, {"set": ["1001", "04 EC"]},
+              {"get": ["1003", "00"], "expect": "00 14 19 0F EC"},
+              {"set": ["1A00", "03 00"]}, {"set": ["1A04", "01"]}, {"set": ["1A00", "01 00"]}, {"set": ["1A02", "64"]},
+              {"set": ["1A00", "03 00"]}, {"set": ["1A04", "00"]},
+              {"get": ["1A01"], "expect": "01 00 02 00 03 00"}, {"get": ["1A05"], "expect": "00"}, {"get": ["1A03"], "expect": "64"},
+              {"get": ["0815"], "expect": "00"}, {"get": ["1607"], "expect": "00"}]}]}
