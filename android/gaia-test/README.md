@@ -2,6 +2,15 @@
 
 Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control channel (RFCOMM, UUID `a2129ff3-081b-4c45-8afe-469d9c4842ec`) and sends single commands. No internet permission, no libraries, Bluetooth only.
 
+## v0.10.5: new look (design v2, "Copper and graphite")
+- Warm graphite and paper colours with one copper accent that only means "live on the headphones now" (status dot, selected mode, active preset, armed guard). Spec: `docs/design-spec-v2.md`, research: `docs/design-research.md`.
+- **Dark mode** follows the phone setting: app, dialogs, widgets and tiles.
+- Header: device name, battery, a status line that says what is going on ("Connection lost. Tap Connect.", "Couldn't reach the headphones..."), one Connect/Disconnect button.
+- Order: Noise control, Sound (presets, an EQ curve, the 5 faders), Auto power-off, then Listening, Device, Power off, Advanced, Log.
+- Monospace readouts for every number; "not read" instead of a dash.
+- Widgets: same colours in light and dark, selected key with the dot, "as last set" note, EQ "Preset n of N". Noise tile icon changes with the mode.
+- Restyle only: the app sends exactly the same commands as v0.10.1. Not yet checked on the phone: `docs/local-test-v0.10.5.md`.
+
 ## Install (Samsung)
 1. On the phone, open this repo on GitHub, go to `android/gaia-test/release/` and download the latest `m4-gaia-test-*.apk` (currently 0.10.1), or grab it from the Releases page.
 2. Open it. Samsung asks to allow installs from that app (Chrome / My Files): allow once.

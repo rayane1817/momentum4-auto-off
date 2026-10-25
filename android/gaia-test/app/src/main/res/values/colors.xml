@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Design v2, direction A "Copper and graphite" (docs/design-spec-v2.md section 2.1). Light. -->
+<resources>
+    <color name="bg">#F3F0EA</color>
+    <color name="surface">#FBFAF7</color>
+    <color name="sunk">#E8E4DC</color>
+    <color name="ink">#1C1B19</color>
+    <color name="ink2">#5C5851</color>
+    <color name="rule">#D6D0C5</color>
+    <color name="rule_strong">#8F887D</color>
+    <color name="on_key">#F3F0EA</color>
+    <color name="copper">#9A4E1C</color>
+    <color name="on_copper">#FFFFFF</color>
+    <color name="pilot">#B8662B</color>
+    <color name="pilot_on_key">#B8662B</color>
+    <color name="danger">#A3241A</color>
+    <color name="on_danger">#FFFFFF</color>
+    <color name="transparent">#00000000</color>
+</resources>

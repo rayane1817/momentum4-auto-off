@@ -1,11 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- EQ preset widget, design v2 (spec 4.2). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="horizontal" android:gravity="center_vertical" android:padding="10dp" android:background="@drawable/w_bg">
-    <Button android:id="@+id/w_eq_prev" android:layout_width="48dp" android:layout_height="40dp"
-        android:text="‹" android:textSize="20sp" android:background="@drawable/w_chip_off" />
-    <TextView android:id="@+id/w_eq_name" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
-        android:gravity="center" android:text="EQ" android:textColor="#FF1A1C1E" android:textSize="15sp" android:textStyle="bold" />
-    <Button android:id="@+id/w_eq_next" android:layout_width="48dp" android:layout_height="40dp"
-        android:text="›" android:textSize="20sp" android:background="@drawable/w_chip_off" />
+    android:orientation="horizontal" android:gravity="center_vertical" android:padding="12dp" android:background="@drawable/w_bg">
+    <TextView android:id="@+id/w_eq_prev" android:layout_width="48dp" android:layout_height="48dp" android:gravity="center"
+        android:text="‹" android:textSize="22sp" android:textColor="@color/ink" android:background="@drawable/w_track" android:contentDescription="Previous preset" />
+    <LinearLayout android:id="@+id/w_eq_center" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+        android:orientation="vertical" android:gravity="center_horizontal">
+        <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+            <TextView android:id="@+id/w_eq_dot" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●"
+                android:textSize="11sp" android:textColor="@color/pilot" android:paddingEnd="6dp" />
+            <TextView android:id="@+id/w_eq_name" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="EQ" android:textColor="@color/ink" android:textSize="16sp" android:fontFamily="sans-serif-medium" android:maxLines="1" android:ellipsize="end" />
+        </LinearLayout>
+        <TextView android:id="@+id/w_eq_pos" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="" android:textColor="@color/ink2" android:textSize="12sp" android:fontFamily="monospace" />
+    </LinearLayout>
+    <TextView android:id="@+id/w_eq_next" android:layout_width="48dp" android:layout_height="48dp" android:gravity="center"
+        android:text="›" android:textSize="22sp" android:textColor="@color/ink" android:background="@drawable/w_track" android:contentDescription="Next preset" />
 </LinearLayout>

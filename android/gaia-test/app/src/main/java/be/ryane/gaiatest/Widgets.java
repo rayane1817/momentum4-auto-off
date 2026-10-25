@@ -8,8 +8,8 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.graphics.Color;
 import android.service.quicksettings.TileService;
+import android.view.View;
 import android.widget.RemoteViews;
 import android.widget.Toast;
 
@@ -23,7 +23,6 @@ import java.util.List;
 final class Widgets {
     static final String ACT_NOISE = "be.ryane.gaiatest.NOISE", ACT_EQ_STEP = "be.ryane.gaiatest.EQ_STEP";
     static final String EXTRA_MODE = "mode", EXTRA_STEP = "step";
-    private static final int ACCENT = 0xFF0E7C66, TEXT = 0xFF1A1C1E;
 
     static SharedPreferences prefs(Context c) { return c.getSharedPreferences("m4", Context.MODE_PRIVATE); }
     static int noise(Context c) { return prefs(c).getInt("noise", -1); }
@@ -96,26 +95,43 @@ final class Widgets {
         } catch (RuntimeException ignored) {}   // tile not added
     }
 
+    /**
+     * Design v2 (spec 4): every colour comes from @color resources inside the layouts, and the
+     * selected state is shown by toggling views, never by setTextColor(int), so the launcher can
+     * repaint the widget for light or dark mode without the app.
+     */
     static RemoteViews noiseViews(Context c) {
         RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_noise);
         int mode = noise(c);
         int[] ids = {R.id.w_adaptive, R.id.w_custom, R.id.w_off};
+        int[] on = {R.id.w_adaptive_on, R.id.w_custom_on, R.id.w_off_on};
+        int[] off = {R.id.w_adaptive_off, R.id.w_custom_off, R.id.w_off_off};
         for (int i = 0; i < 3; i++) {
             boolean sel = i == mode;
-            v.setInt(ids[i], "setBackgroundResource", sel ? R.drawable.w_chip_on : R.drawable.w_chip_off);
-            v.setTextColor(ids[i], sel ? Color.WHITE : TEXT);
+            v.setInt(ids[i], "setBackgroundResource", sel ? R.drawable.w_key_on : 0);
+            v.setViewVisibility(on[i], sel ? View.VISIBLE : View.GONE);
+            v.setViewVisibility(off[i], sel ? View.GONE : View.VISIBLE);
             v.setOnClickPendingIntent(ids[i], broadcast(c, NoiseWidget.class, ACT_NOISE, EXTRA_MODE, i, 10 + i));
         }
+        boolean known = mode >= 0;
+        v.setTextViewText(R.id.w_title, known ? prefs(c).getString("devName", "M4") : "Tap a mode. Not read yet.");
+        v.setViewVisibility(R.id.w_note, known ? View.VISIBLE : View.GONE);
         v.setOnClickPendingIntent(R.id.w_title, openApp(c));
         return v;
     }
 
     static RemoteViews eqViews(Context c) {
         RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_eq);
+        List<Presets.Preset> all = Presets.all(c);
+        int i = eqIdx(c);
+        boolean known = i >= 0 && i < all.size();
         v.setTextViewText(R.id.w_eq_name, eqName(c));
+        v.setViewVisibility(R.id.w_eq_dot, known ? View.VISIBLE : View.GONE);
+        v.setTextViewText(R.id.w_eq_pos, known ? "Preset " + (i + 1) + " of " + all.size() : "");
+        v.setViewVisibility(R.id.w_eq_pos, known ? View.VISIBLE : View.GONE);
         v.setOnClickPendingIntent(R.id.w_eq_prev, broadcast(c, EqWidget.class, ACT_EQ_STEP, EXTRA_STEP, -1, 20));
         v.setOnClickPendingIntent(R.id.w_eq_next, broadcast(c, EqWidget.class, ACT_EQ_STEP, EXTRA_STEP, 1, 21));
-        v.setOnClickPendingIntent(R.id.w_eq_name, openApp(c));
+        v.setOnClickPendingIntent(R.id.w_eq_center, openApp(c));
         return v;
     }
 

@@ -20,8 +20,11 @@ public class NoiseTile extends TileService {
         Tile t = getQsTile();
         if (t == null) return;
         int m = Widgets.noise(this);
-        t.setLabel("Noise: " + (m < 0 ? "?" : Remote.NOISE_NAMES[m]));
-        if (Build.VERSION.SDK_INT >= 29) t.setSubtitle("MOMENTUM 4");
+        t.setLabel(m < 0 ? "Noise: tap to set" : "Noise: " + Remote.NOISE_NAMES[m]);
+        if (Build.VERSION.SDK_INT >= 29) t.setSubtitle("M4");
+        int icon = m == Remote.NOISE_CUSTOM ? R.drawable.ic_tile_anc_custom
+                : m == Remote.NOISE_OFF ? R.drawable.ic_tile_anc_off : R.drawable.ic_tile_anc;
+        t.setIcon(android.graphics.drawable.Icon.createWithResource(this, icon));
         t.setState(m == Remote.NOISE_OFF ? Tile.STATE_INACTIVE : Tile.STATE_ACTIVE);
         t.updateTile();
     }

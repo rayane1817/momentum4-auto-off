@@ -17,8 +17,9 @@ public class EqTile extends TileService {
     private void draw() {
         Tile t = getQsTile();
         if (t == null) return;
-        t.setLabel("EQ: " + Widgets.eqName(this));
-        if (Build.VERSION.SDK_INT >= 29) t.setSubtitle("MOMENTUM 4");
+        String l = "EQ: " + Widgets.eqName(this);
+        t.setLabel(l.length() > 18 ? l.substring(0, 17) + "…" : l);       // system tile labels fit ~18 chars
+        if (Build.VERSION.SDK_INT >= 29) t.setSubtitle("M4");
         t.setState(Tile.STATE_ACTIVE);
         t.updateTile();
     }
