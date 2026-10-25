@@ -36,9 +36,9 @@ Details: [`docs/protocol.md`](docs/protocol.md) (protocol and command map) and [
 
 - **Auto power-off when idle.** A background guard watches the phone. When no audio has played and there has been no call for the set time (default 15 minutes), it connects to the headphones and sends `0605`. Nothing else holds the connection while it waits.
 - **Power off now.** One button, with a confirmation.
-- **Noise control and settings.** Adaptive / Custom / Off noise control with an ANC-transparency slider and anti-wind, a 5-band EQ with bass boost and speech clarity, Hi-Res, on-head detection, call transparency, smart pause, auto-answer, low latency, plus a readout of battery, model and firmware.
+- **Noise control and settings.** Adaptive / Custom / Off noise control with an ANC-transparency slider and anti-wind, a 5-band EQ with Smart Control's presets, bass boost and speech clarity, comfort call, touch controls, Hi-Res, on-head detection, call transparency, smart pause, auto-answer, low latency, plus a readout of battery, model and firmware.
 
-Install: on the phone, tap **[Download the APK (v0.8)](https://github.com/rayane1817/momentum4-auto-off/raw/main/android/gaia-test/release/m4-gaia-test-0.8.apk)** and allow the install. It's a self-built app, so Play Protect will warn you. SHA-256 is in [`SHA256SUMS`](android/gaia-test/release/SHA256SUMS). If the app can't connect, force-stop Smart Control Plus, because only one app can use the control channel at a time. More in the [app README](android/gaia-test/README.md).
+Install: on the phone, tap **[Download the APK (v0.9)](https://github.com/rayane1817/momentum4-auto-off/raw/main/android/gaia-test/release/m4-gaia-test-0.9.apk)** and allow the install. It's a self-built app, so Play Protect will warn you. SHA-256 is in [`SHA256SUMS`](android/gaia-test/release/SHA256SUMS). If the app can't connect, force-stop Smart Control Plus, because only one app can use the control channel at a time. More in the [app README](android/gaia-test/README.md).
 
 Known limits:
 - If you wear the headphones in silence (ANC on, no audio) longer than the timeout, the guard switches them off. Raise the timeout if that bothers you.
@@ -83,6 +83,8 @@ GPL-3.0, see [`LICENSE`](LICENSE). You may use, change and share the code, as lo
 
 ## Credits
 
-- [Oein/sennheiser-desktop-client](https://github.com/Oein/sennheiser-desktop-client) and [momentumctl](https://zff.dev/galen/momentumctl), whose protocol work on other Sennheiser models confirmed the framing and several commands.
+- [Oein/sennheiser-desktop-client](https://github.com/Oein/sennheiser-desktop-client) and [momentumctl](https://codeberg.org/galen/momentumctl), whose protocol work confirmed the framing and several commands.
+- [DanSmith888/omarchy-momentum4](https://github.com/DanSmith888/omarchy-momentum4) (MIT): its `PROTOCOL.md` M4 command table (comfort call, touch controls, `1407`, EQ, the `1403` and `06xx` warnings) and `presets.json` (Smart Control's EQ preset values).
+- [timmo001/omarchy-momentumctl](https://github.com/timmo001/omarchy-momentumctl) and [f3Y0/momentum4-control](https://github.com/f3Y0/momentum4-control) (MIT), other working M4 clients used to cross-check commands.
 - r/sennheiser users who shared their experiences.
 - Built with Claude Code. Reverse engineering for interoperability only: no Sennheiser code or files are included in this repo.

@@ -67,9 +67,16 @@ public class MainActivity extends Activity {
     private SeekBar transpSeek, callSeek;
     private TextView transpValue, callValue;
     private Switch swSmartPause, swAutoAnswer, swLowLatency, swHiRes, swOnHead, swAutoStart;
-    private Switch swBass, swSpeech;
+    private Switch swBass, swSpeech, swComfort, swTouch;
+    private TextView hiResHint;
     private static final String[] EQ_BANDS = {"63 Hz", "250 Hz", "1 kHz", "4 kHz", "8 kHz"};
     private final SeekBar[] eqSeek = new SeekBar[5];
+    private final int[] eqGain = new int[5];                     // current curve, dB x 10
+    private static final String[] PRESET_NAMES = {"Neutral", "Rock", "Pop", "Dance", "Hip-Hop", "Classical", "Movie", "Jazz"};
+    private static final int[][] PRESETS = {                     // dB x 10 per band
+            {0, 0, 0, 0, 0}, {0, 20, 25, 15, -20}, {0, -25, 0, 25, 0}, {35, 20, -15, 15, 30},
+            {30, 15, -15, 0, -15}, {-20, -15, 0, 35, 40}, {0, 0, 20, 20, -20}, {-32, 0, 22, 22, 0}};
+    private final Button[] presetBtns = new Button[PRESETS.length];
     private final TextView[] eqValue = new TextView[5];
     private final java.util.ArrayDeque<Integer> pendingBands = new java.util.ArrayDeque<>();   // 1002 GETs in flight
     private Button guardButton;
@@ -286,14 +293,32 @@ public class MainActivity extends Activity {
         });
         gate(flat);
         titleRow.addView(flat);
+
+        // Smart Control Plus presets (app-side; the headset only stores the curve).
+        // Values from omarchy-momentum4 presets.json, checked against our own capture 2.
+        android.widget.HorizontalScrollView hs = new android.widget.HorizontalScrollView(this);
+        hs.setHorizontalScrollBarEnabled(false);
+        LinearLayout chips = new LinearLayout(this);
+        for (int i = 0; i < PRESET_NAMES.length; i++) {
+            final int idx = i;
+            Button b = outlineBtn(PRESET_NAMES[i], v -> applyPreset(idx));
+            gate(b);
+            presetBtns[i] = b;
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, dp(40));
+            lp.rightMargin = dp(6);
+            chips.addView(b, lp);
+        }
+        hs.addView(chips);
+        c.addView(hs);
+
         for (int i = 0; i < 5; i++) {
             final int band = i;
             TextView[] tv = new TextView[1];
-            // 0..24 = -6.0..+6.0 dB in 0.5 dB steps; wire value = dB x 10, signed byte
-            eqSeek[i] = slider(c, EQ_BANDS[i], 24, tv, p -> String.format(Locale.ROOT, "%+.1f dB", (p - 12) / 2.0),
-                    p -> send(b2(0x1001, band, (p - 12) * 5)));
+            // 0..120 = -6.0..+6.0 dB in 0.1 dB steps (as in Smart Control); wire value = dB x 10, signed byte
+            eqSeek[i] = slider(c, EQ_BANDS[i], 120, tv, p -> String.format(Locale.ROOT, "%+.1f dB", (p - 60) / 10.0),
+                    p -> { send(b2(0x1001, band, p - 60)); eqGain[band] = p - 60; markPreset(); });
             eqValue[i] = tv[0];
-            eqSeek[i].setProgress(12);
+            eqSeek[i].setProgress(60);
         }
         swBass = switchRow(c, "Bass boost", on -> toggle(0x1008, on));
         swSpeech = switchRow(c, "Speech clarity", on -> send(b2(0x0803, 0, on ? 2 : 1)));
@@ -302,8 +327,23 @@ public class MainActivity extends Activity {
     }
 
     private void setEq(int band, int gainX10) {
-        int p = Math.max(0, Math.min(24, Math.round(gainX10 / 5f) + 12));
-        eqSeek[band].setProgress(p);
+        eqGain[band] = gainX10;
+        eqSeek[band].setProgress(Math.max(0, Math.min(120, gainX10 + 60)));
+        markPreset();
+    }
+
+    private void applyPreset(int idx) {
+        for (int b = 0; b < 5; b++) { send(b2(0x1001, b, PRESETS[idx][b])); setEq(b, PRESETS[idx][b]); }
+    }
+
+    /** Highlight the preset whose curve matches exactly, like Smart Control does. */
+    private void markPreset() {
+        for (int i = 0; i < PRESETS.length; i++) {
+            if (presetBtns[i] == null) continue;
+            boolean m = java.util.Arrays.equals(PRESETS[i], eqGain);
+            presetBtns[i].setBackground(rounded(m ? ACCENT : CARD, 10, m ? 0 : DIVIDER, 1));
+            presetBtns[i].setTextColor(m ? Color.WHITE : TEXT);
+        }
     }
 
     private View listeningCard() {
@@ -312,8 +352,15 @@ public class MainActivity extends Activity {
         swAutoAnswer = switchRow(c, "Auto-answer calls", on -> toggle(0x080A, on));
         swOnHead = switchRow(c, "On-head detection", on -> toggle(0x0400, on));
         swLowLatency = switchRow(c, "Low latency", on -> toggle(0x0817, on));
-        swHiRes = switchRow(c, "Hi-Res 24/96 (restart the headphones after changing)",
-                on -> send(a(0x0405, on ? 0 : 1)));                      // 0 = Hi-Res on
+        swComfort = switchRow(c, "Comfort call", on -> toggle(0x0814, on));
+        swTouch = switchRow(c, "Touch controls", on -> send(a(0x1606, on ? 0 : 1)));   // inverted: 0 = enabled
+        gate(swComfort); gate(swTouch);
+        swHiRes = switchRow(c, "Hi-Res 24/96",
+                on -> { send(a(0x0405, on ? 0 : 1)); send(g(0x0406)); send(g(0x1407)); });   // 0 = Hi-Res on
+        hiResHint = caption("Restart needed: switch the headphones off and on (or use Power off now, then the button) for the Hi-Res change to apply.");
+        hiResHint.setTextColor(DANGER);
+        hiResHint.setVisibility(View.GONE);
+        c.addView(hiResHint);
         gate(swSmartPause); gate(swAutoAnswer); gate(swOnHead); gate(swLowLatency); gate(swHiRes);
         TextView[] tv = new TextView[1];
         callSeek = slider(c, "Transparency during calls", 4, tv, p -> p == 0 ? "off" : p + " / 4",
@@ -683,6 +730,10 @@ public class MainActivity extends Activity {
             case 0x0806: if (f.type() != 3 && b0 >= 0 && b0 <= 4) callSeek.setProgress(b0); break;
             case 0x1009: if (f.type() != 3 && b0 >= 0) swBass.setChecked(b0 == 1); break;
             case 0x0804: if (f.type() != 3 && f.payload.length >= 2) swSpeech.setChecked(Gaia.u16(f.payload, 0) == 2); break;
+            case 0x1407: if (f.type() == 2 && b0 >= 0) hiResHint.setVisibility(b0 == 1 ? View.VISIBLE : View.GONE); break;   // 01 = restart pending
+            case 0x0815: if (f.type() != 3 && b0 >= 0) swComfort.setChecked(b0 == 1); break;
+            case 0x1607: if (f.type() != 3 && b0 >= 0) swTouch.setChecked(b0 == 0); break;   // inverted
+            case 0x1003: if (f.type() == 2 && f.payload.length >= 5) for (int i = 0; i < 5; i++) setEq(i, f.payload[i]); break;
             case 0x1002:                                                     // 1082 notif = all 5 bands, 1102 resp = one band
                 if (f.type() == 1 && f.payload.length >= 5) {
                     for (int i = 0; i < 5; i++) setEq(i, f.payload[i]);
@@ -834,11 +885,11 @@ public class MainActivity extends Activity {
 
     private void readAllConfig() {
         if (out == null) { toast("Connect first"); return; }
-        int[] gets = {0x1A05, 0x1A01, 0x1A03, 0x080D, 0x080B, 0x0818, 0x0806, 0x0401, 0x0406,
+        int[] gets = {0x1A05, 0x1A01, 0x1A03, 0x080D, 0x080B, 0x0818, 0x0815, 0x1607, 0x0806, 0x0401, 0x0406,
                 0x1009, 0x0804, 0x0603, 0x1206, 0x1201, 0x1200};
         for (int x : gets) send(g(x));
-        pendingBands.clear();
-        for (int i = 0; i < 5; i++) { pendingBands.add(i); send(g(0x1002, i)); }
+        send(g(0x1003, 0));                                          // all 5 EQ gains at once
+        send(g(0x1407));                                             // restart pending (Hi-Res)
     }
 
     /** Ask for change notifications (noise 0x0d, EQ 0x08, audio/device 0x04), as the official app does. */
