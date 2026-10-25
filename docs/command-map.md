@@ -2,7 +2,7 @@
 
 One reference for the app, the PC client and future sessions. State as of 25 Oct 2026, Ryane's M4, firmware 3.38.3. Details and evidence: `config-spec.md` (captures), `scp-static.md` (community tables), CLAUDE.md test log (T1-T22).
 
-Framing: GAIA v3, `FF 03 | len | vendor | command | payload`. Command = `feature << 9 | type << 7 | cmd`. Replies = command | `0100`, notifications | `0080`, errors | `0180`. Codes below are the set/get command.
+Framing: GAIA v3, `FF 03 | len | vendor | command | payload`. Command = `feature << 9 | type << 7 | cmd`. Replies = command | `0100`, notifications | `0080`, errors | `0180`. Error codes seen: `01` not supported, `05` invalid parameter, `80` value already set (no change, T21/T39), `83` refused in the current state / out of range (T39). Codes below are the set/get command.
 
 **Legend:** ✅ confirmed on Ryane's M4 (capture or local session) · 🟡 community tables, not tested by us · ❓ seen on the wire, meaning unknown · ⛔ blocked in the app (`Gaia.blockedReason`) and the PC client (`blocked_reason`)
 
@@ -48,7 +48,7 @@ Framing: GAIA v3, `FF 03 | len | vendor | command | payload`. Command = `feature
 | `0800` | Codec in use | ✅ |
 | `0880` / `089A` | Audio stream on/off, sample-rate notifications | ✅ |
 | `0801` / `0802` | Voice prompts mode (`02` = voice prompts) | ✅ |
-| `0803` / `0804` | Sound mode u16: `00 01` normal, `00 02` Speech Clarity | ✅ |
+| `0803` / `0804` | Sound mode u16: `00 01` normal, `00 02` Speech Clarity. **Refused while Hi-Res is on** (`0405 [00]`): `0803 [00 02]` -> error `83` (T39, Nokia run); with Hi-Res off it works. Writing the value it already has -> error `80` | ✅ |
 | `0805` / `0806` | Transparency during calls 0-4 (0 = off) | ✅ |
 | `0807` | Prompt language, read only | 🟡 |
 | `080A` / `080B` | Auto-answer calls | ✅ |

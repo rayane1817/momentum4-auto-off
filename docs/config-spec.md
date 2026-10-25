@@ -125,3 +125,7 @@ Details: `captures/capture3_scp_writes_redacted.md`. PC checks: `windows-client/
 - `0803 [00 00]` was refused once with error `0x80` right after a restart (value already `00 00`); accepted in T15.
 - **Disconnect**: SCP sends `1403 [index]` (T19), see Connection management above.
 - Unknown SET `1800 [0/1]` (resp `1900`, GET `1801`) seen from SCP before this session: feature 12, probably "Pause automatique" in transparency. Unconfirmed.
+
+## Nokia XR20 run (25 Oct 2026, T37-T42)
+- **Speech Clarity is locked by Hi-Res**: with Hi-Res on, `0803 [00 02]` -> error `0x83`; with Hi-Res off, `0803 [00 02]` and `[00 01]` are accepted (T39). Same-value writes -> error `0x80` (also explains T21).
+- Everything else behaves the same on a second phone (Nokia XR20, stock Android 14): all v0.11.1 frames, widgets, tiles and the guard.
