@@ -68,7 +68,6 @@ public class MainActivity extends Activity {
     private TextView transpValue, callValue;
     private Switch swSmartPause, swAutoAnswer, swLowLatency, swHiRes, swOnHead, swAutoStart;
     private Switch swBass, swSpeech, swComfort, swTouch;
-    private TextView hiResHint;
     private static final String[] EQ_BANDS = {"63 Hz", "250 Hz", "1 kHz", "4 kHz", "8 kHz"};
     private final SeekBar[] eqSeek = new SeekBar[5];
     private final int[] eqGain = new int[5];                     // current curve, dB x 10
@@ -251,7 +250,8 @@ public class MainActivity extends Activity {
         TextView aw = caption("Anti-wind");
         aw.setPadding(0, dp(8), 0, dp(4));
         b.addView(aw);
-        antiWind = new Segmented(new String[]{"Off", "Auto", "Max"}, idx -> send(b2(0x1A00, 1, idx)));
+        // UI order Off/Auto/Max; wire values 0 = off, 1 = Max, 2 = Auto (T17, confirmed on hardware)
+        antiWind = new Segmented(new String[]{"Off", "Auto", "Max"}, idx -> send(b2(0x1A00, 1, antiWindSwap(idx))));
         b.addView(antiWind.view);
         customBlock = b;
         customBlock.setVisibility(View.GONE);
@@ -355,12 +355,8 @@ public class MainActivity extends Activity {
         swComfort = switchRow(c, "Comfort call", on -> toggle(0x0814, on));
         swTouch = switchRow(c, "Touch controls", on -> send(a(0x1606, on ? 0 : 1)));   // inverted: 0 = enabled
         gate(swComfort); gate(swTouch);
-        swHiRes = switchRow(c, "Hi-Res 24/96",
-                on -> { send(a(0x0405, on ? 0 : 1)); send(g(0x0406)); send(g(0x1407)); });   // 0 = Hi-Res on
-        hiResHint = caption("Restart needed: switch the headphones off and on (or use Power off now, then the button) for the Hi-Res change to apply.");
-        hiResHint.setTextColor(DANGER);
-        hiResHint.setVisibility(View.GONE);
-        c.addView(hiResHint);
+        swHiRes = switchRow(c, "Hi-Res 24/96 (restart the headphones after changing)",
+                on -> { send(a(0x0405, on ? 0 : 1)); send(g(0x0406)); });   // 0 = Hi-Res on
         gate(swSmartPause); gate(swAutoAnswer); gate(swOnHead); gate(swLowLatency); gate(swHiRes);
         TextView[] tv = new TextView[1];
         callSeek = slider(c, "Transparency during calls", 4, tv, p -> p == 0 ? "off" : p + " / 4",
@@ -688,6 +684,9 @@ public class MainActivity extends Activity {
     // ----------------------------------------------------- frame shorthands
 
     private static byte[] a(int cmd, int v) { return Gaia.build(Gaia.SENNHEISER, cmd, (byte) v); }
+    /** Maps UI index (Off, Auto, Max) to wire value (0, 2, 1) and back: the mapping is its own inverse. */
+    static int antiWindSwap(int v) { return v == 1 ? 2 : v == 2 ? 1 : v; }
+
     private static byte[] b2(int cmd, int x, int y) { return Gaia.build(Gaia.SENNHEISER, cmd, (byte) x, (byte) y); }
     private static byte[] g(int cmd) { return Gaia.build(Gaia.SENNHEISER, cmd); }
     private static byte[] g(int cmd, int v) { return Gaia.build(Gaia.SENNHEISER, cmd, (byte) v); }
@@ -717,7 +716,7 @@ public class MainActivity extends Activity {
                 for (int i = 0; i + 1 < f.payload.length; i += 2) {
                     int mode = f.payload[i] & 0xFF, st = f.payload[i + 1] & 0xFF;
                     if (mode == 3) adaptiveOn = st == 1;
-                    if (mode == 1 && st <= 2) antiWind.select(st, false);
+                    if (mode == 1 && st <= 2) antiWind.select(antiWindSwap(st), false);
                 }
                 refreshNoise();
                 break;
@@ -730,7 +729,6 @@ public class MainActivity extends Activity {
             case 0x0806: if (f.type() != 3 && b0 >= 0 && b0 <= 4) callSeek.setProgress(b0); break;
             case 0x1009: if (f.type() != 3 && b0 >= 0) swBass.setChecked(b0 == 1); break;
             case 0x0804: if (f.type() != 3 && f.payload.length >= 2) swSpeech.setChecked(Gaia.u16(f.payload, 0) == 2); break;
-            case 0x1407: if (f.type() == 2 && b0 >= 0) hiResHint.setVisibility(b0 == 1 ? View.VISIBLE : View.GONE); break;   // 01 = restart pending
             case 0x0815: if (f.type() != 3 && b0 >= 0) swComfort.setChecked(b0 == 1); break;
             case 0x1607: if (f.type() != 3 && b0 >= 0) swTouch.setChecked(b0 == 0); break;   // inverted
             case 0x1003: if (f.type() == 2 && f.payload.length >= 5) for (int i = 0; i < 5; i++) setEq(i, f.payload[i]); break;
@@ -777,6 +775,7 @@ public class MainActivity extends Activity {
             append("This device has no Bluetooth.");
             return;
         }
+        if (adapter.getState() == BluetoothAdapter.STATE_TURNING_ON) return;   // a STATE_ON broadcast follows
         if (!adapter.isEnabled()) {
             append("Bluetooth is off. Turn it on; the list refreshes automatically.");
             return;
@@ -889,7 +888,6 @@ public class MainActivity extends Activity {
                 0x1009, 0x0804, 0x0603, 0x1206, 0x1201, 0x1200};
         for (int x : gets) send(g(x));
         send(g(0x1003, 0));                                          // all 5 EQ gains at once
-        send(g(0x1407));                                             // restart pending (Hi-Res)
     }
 
     /** Ask for change notifications (noise 0x0d, EQ 0x08, audio/device 0x04), as the official app does. */
@@ -943,13 +941,24 @@ public class MainActivity extends Activity {
         closeQuietly();
         runOnUiThread(() -> setConnected(false));
         AutoOffService.start(this, device.getAddress(), minutes * 60_000L);
-        guardStatus.setText("Guard running: off after " + minutes + " min idle.");
         append("Idle guard started (" + minutes + " min).");
         refreshGuardButton();
     }
 
+    /** The service flips `running` asynchronously, so re-check shortly after a start/stop. */
     private void refreshGuardButton() {
-        if (guardButton != null) guardButton.setText(AutoOffService.running ? "STOP GUARD" : "START GUARD");
+        applyGuardState();
+        if (guardButton != null) {
+            guardButton.postDelayed(this::applyGuardState, 600);
+            guardButton.postDelayed(this::applyGuardState, 2000);
+        }
+    }
+
+    private void applyGuardState() {
+        if (guardButton == null) return;
+        boolean on = AutoOffService.running;
+        guardButton.setText(on ? "STOP GUARD" : "START GUARD");
+        guardStatus.setText(on ? "Guard running: off after " + prefs.getInt("minutes", 15) + " min idle." : "Guard stopped.");
     }
 
     private void copyLog() {

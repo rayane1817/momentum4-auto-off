@@ -7,15 +7,25 @@ android {
         applicationId 'be.ryane.gaiatest'
         minSdk 26
         targetSdk 35
-        versionCode 11
-        versionName '0.9'
+        versionCode 12
+        versionName '0.9.1'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+    // One fixed key for local and CI builds, so every release installs over the previous one.
+    // It is public on purpose (community sideload build, not a store app): anyone can sign with it.
+    signingConfigs {
+        shared {
+            storeFile file('../keystore/m4-shared.jks')
+            storePassword 'android'
+            keyAlias 'm4shared'
+            keyPassword 'android'
+        }
+    }
     buildTypes {
-        // Debug-signed release is fine for a personal sideloaded test tool.
-        release { minifyEnabled false; signingConfig signingConfigs.debug }
+        release { minifyEnabled false; signingConfig signingConfigs.shared }
+        debug { signingConfig signingConfigs.shared }
     }
 }
