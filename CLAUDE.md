@@ -21,9 +21,8 @@ Full history and test log T1-T42: `docs/history.md`. Read it only when a task ne
 - No Sennheiser or Nothing marks or fonts in the app.
 
 ## Current state (1 Nov 2026)
-- Released: v0.12.1 (design v3 "Copper on black", audit fixes). v0.12.x NOT yet run on a phone: `docs/local-test-v0.12.0.md`.
-- In progress: v0.13.0 = guard back-off after a failed power-off (`GuardRetry`), Device > Copy report (`Report`, no addresses), GitHub issue form, slim CLAUDE.md.
-- Next: Ryane posts `docs/reddit-post-v2.md` after v0.13.0; about 7 days later ONE session turns all replies into `docs/community-reports.md`, ranks fixes, builds one release.
+- Released: v0.13.0 (1 Nov 2026) = design v3 "Copper on black" (0.12.0) + guard connect deadline (0.12.1) + guard back-off `GuardRetry`, Device > Copy report `Report`, GitHub "Test report" form (0.13.0). None of 0.12.x/0.13.0 run on a phone yet: `docs/local-test-v0.12.0.md` covers all three in one laptop run.
+- Next: Ryane posts `docs/reddit-post-v2.md`; about 7 days later ONE session turns all replies into `docs/community-reports.md`, ranks fixes, builds one release.
 - Open questions (only from community data or a planned capture): 0605 on other firmware and models; guard on aggressive battery-saver phones; meaning of `1405`, `1800`, `1407` (read-only, never probe).
 
 ## Map
