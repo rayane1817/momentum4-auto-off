@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Design v4 line icon (own glyph, 24 dp grid, round caps). White, tinted at use. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M3 12h3l2-6 4 12 3-9 2 3h4" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.5"
+        android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

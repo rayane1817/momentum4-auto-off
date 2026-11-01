@@ -1,21 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- EQ preset widget, design v3 (docs/design-spec-v3.md). -->
+<!-- EQ preset widget, design v4 section 9: round prev/next, preset name, curve thumbnail. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
     android:orientation="horizontal" android:gravity="center_vertical" android:padding="8dp" android:background="@drawable/w_bg">
-    <TextView android:id="@+id/w_eq_prev" android:layout_width="48dp" android:layout_height="48dp" android:gravity="center"
-        android:text="‹" android:textSize="22sp" android:textColor="@color/ink" android:background="@drawable/w_round" android:contentDescription="Previous preset" />
+    <ImageView android:id="@+id/w_eq_prev" android:layout_width="44dp" android:layout_height="44dp" android:padding="11dp"
+        android:background="@drawable/w_circle_off" android:src="@drawable/ic_chevron_left" android:tint="@color/ink" android:contentDescription="Previous preset" />
     <LinearLayout android:id="@+id/w_eq_center" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
         android:orientation="vertical" android:gravity="center_horizontal">
         <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
             <TextView android:id="@+id/w_eq_dot" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●"
-                android:textSize="11sp" android:textColor="@color/pilot" android:paddingEnd="6dp" />
+                android:textSize="10sp" android:textColor="@color/pilot" android:paddingEnd="5dp" />
             <TextView android:id="@+id/w_eq_name" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="EQ" android:textColor="@color/ink" android:textSize="16sp" android:fontFamily="sans-serif-medium" android:maxLines="1" android:ellipsize="end" />
+                android:text="Equaliser" android:textColor="@color/ink" android:textSize="15sp" android:fontFamily="sans-serif-medium" android:maxLines="1" android:ellipsize="end" />
         </LinearLayout>
-        <TextView android:id="@+id/w_eq_pos" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="" android:textColor="@color/ink2" android:textSize="11sp" android:fontFamily="monospace" android:letterSpacing="0.12" />
+        <ImageView android:id="@+id/w_eq_thumb" android:layout_width="64dp" android:layout_height="18dp" android:layout_marginTop="3dp" android:importantForAccessibility="no" />
+        <TextView android:id="@+id/w_eq_pos" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
     </LinearLayout>
-    <TextView android:id="@+id/w_eq_next" android:layout_width="48dp" android:layout_height="48dp" android:gravity="center"
-        android:text="›" android:textSize="22sp" android:textColor="@color/ink" android:background="@drawable/w_round" android:contentDescription="Next preset" />
+    <ImageView android:id="@+id/w_eq_next" android:layout_width="44dp" android:layout_height="44dp" android:padding="11dp"
+        android:background="@drawable/w_circle_off" android:src="@drawable/ic_chevron" android:tint="@color/ink" android:contentDescription="Next preset" />
 </LinearLayout>

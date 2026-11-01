@@ -4,12 +4,12 @@ import android.content.Context;
 import android.graphics.Typeface;
 
 /**
- * Design tokens (docs/design-spec-v2.md section 2), resolved from res/values(-night)/colors.xml
+ * Design tokens (docs/design-spec-v2.md section 2, values from v4 section 3), resolved from res/values(-night)/colors.xml
  * for the current configuration. The only place colours are read; no colour literals elsewhere.
  */
 final class Tok {
     final int bg, surface, sunk, ink, ink2, rule, ruleStrong, onKey, copper, onCopper, pilot, pilotOnKey,
-            danger, onDanger, transparent;
+            danger, onDanger, transparent, faderCap, faderEdge, glow, matrixLit;
 
     static final Typeface MEDIUM = Typeface.create("sans-serif-medium", Typeface.NORMAL);
     static final Typeface REGULAR = Typeface.create("sans-serif", Typeface.NORMAL);
@@ -19,6 +19,9 @@ final class Tok {
     static final String TABULAR = "tnum";
     /** Only the raw log keeps a real monospace face. */
     static final Typeface CODE = Typeface.MONOSPACE;
+    /** v4 page titles and the device name: the phone's own serif (light where the device has it). */
+    static final Typeface SERIF = android.os.Build.VERSION.SDK_INT >= 28
+            ? Typeface.create(Typeface.SERIF, 300, false) : Typeface.create("serif", Typeface.NORMAL);
 
     Tok(Context c) {
         bg = c.getColor(R.color.bg);
@@ -36,6 +39,10 @@ final class Tok {
         danger = c.getColor(R.color.danger);
         onDanger = c.getColor(R.color.on_danger);
         transparent = c.getColor(R.color.transparent);
+        faderCap = c.getColor(R.color.fader_cap);
+        faderEdge = c.getColor(R.color.fader_edge);
+        glow = c.getColor(R.color.glow);
+        matrixLit = c.getColor(R.color.matrix_lit);
     }
 
     /** colour with a new alpha (0..1), e.g. a pressed overlay or a 45 % switch track. */

@@ -30,6 +30,7 @@ import android.view.WindowInsets;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
@@ -58,31 +59,32 @@ public class MainActivity extends Activity {
     private final ExecutorService sender = Executors.newSingleThreadExecutor();
 
     private Spinner deviceSpinner;
-    private TextView statusLine, statusDetail, noiseHint, guardDot, guardUnit, guardSummary, batteryLabel, heroFw;
-    private TextView tileSound, tileListen, tileDevice, tileDeviceSub;
+    private TextView statusLine, statusDetail, noiseHint, guardUnit, heroName;
+    private TextView tileSound, tileListen, tileDevice, tileGuardSub;
     private DotNumerals batteryDots, guardDots;
+    private EqFaders eqFaders;
+    private Button presetPill;
+    private Switch guardSwitch;
+    private ImageView guardIcon;
+    private boolean guardApplying;
+    private long guardPendingUntil;          // after a tap on the guard switch: let the service catch up
     private Button connectBtn;
     private EqCurve eqCurve;
-    private final List<String> presetNames = new ArrayList<>();
     private boolean userDisconnect, connecting, confirmedOther;
     private TextView guardTarget;
     private TextView vBattery, vModel, vFirmware, vHardware, guardStatus, log;
     private ScrollView logScroll;
-    private Segmented noise, antiWind;
+    private RoundChoice noise;
+    private Segmented antiWind;
     private View customBlock;
     private SeekBar transpSeek, callSeek;
     private TextView transpValue, callValue;
     private Switch swSmartPause, swAutoAnswer, swLowLatency, swHiRes, swOnHead, swAutoStart;
     private Switch swBass, swSpeech, swComfort, swTouch;
-    private static final String[] EQ_BANDS = {"63 Hz", "250 Hz", "1 kHz", "4 kHz", "8 kHz"};
-    private final SeekBar[] eqSeek = new SeekBar[5];
     private final int[] eqGain = new int[5];                     // current curve, dB x 10
     private final EqSync eqSync = new EqSync();                  // eqGain mirrors the headset?
-    private LinearLayout presetChips;
-    private final List<Button> presetBtns = new ArrayList<>();
     /** The app instance holding the GAIA link, used by widgets/tiles to send through it. */
     static volatile MainActivity live;
-    private final TextView[] eqValue = new TextView[5];
     private Button guardButton;
     private EditText idleMinutes, secondsField, hexField;
 
@@ -115,6 +117,7 @@ public class MainActivity extends Activity {
         pages[HOME] = pageScroll(homePage());
         pages[SOUND] = pageScroll(soundPage());
         pages[LISTENING] = pageScroll(listeningPage());
+        pages[GUARD] = pageScroll(guardPage());
         android.widget.FrameLayout frame = new android.widget.FrameLayout(this);
         for (ScrollView pg : pages) frame.addView(pg, new android.widget.FrameLayout.LayoutParams(-1, -1));
         root.addView(frame, new LinearLayout.LayoutParams(-1, 0, 1f));
@@ -171,9 +174,10 @@ public class MainActivity extends Activity {
     }
 
     // ---------------------------------------------------------------- views
-    // Design v3 "Copper on black" (docs/design-spec-v3.md): a Home page for daily use plus three
-    // sub-pages. Views are built once and only moved between pages, so onFrame() keeps every control
-    // current while its page is hidden. Every control sends exactly the frames it sent in v0.11.2.
+    // Design v4 (docs/design-spec-v4.md): Nothing X layout + Poweramp faders. Home + four pages
+    // (Equaliser, Listening, Device, Auto power-off). Views are built once and only moved between
+    // pages, so onFrame() keeps every control current while its page is hidden. Every control sends
+    // the frames it sent in v0.13.0; the EQ faders send the same 1001 frame, now also from a sweep.
 
     /**
      * targetSdk 35 draws edge to edge on Android 15+: pad the root by the system bars, the cutout and
@@ -198,8 +202,8 @@ public class MainActivity extends Activity {
 
     // ---- pages
 
-    private static final int HOME = 0, SOUND = 1, LISTENING = 2, DEVICE = 3;
-    private final ScrollView[] pages = new ScrollView[4];
+    private static final int HOME = 0, SOUND = 1, LISTENING = 2, DEVICE = 3, GUARD = 4;
+    private final ScrollView[] pages = new ScrollView[5];
     private int page = HOME;
 
     private ScrollView pageScroll(View content) {
@@ -225,76 +229,206 @@ public class MainActivity extends Activity {
     private LinearLayout column() {
         LinearLayout c = new LinearLayout(this);
         c.setOrientation(LinearLayout.VERTICAL);
-        c.setPadding(dp(16), dp(12), dp(16), dp(32));
+        c.setPadding(dp(12), dp(4), dp(12), dp(32));
         return c;
     }
 
-    /** Sub-page top row: back arrow, title, optional action on the right, then the "not connected" hint. */
-    private LinearLayout subPage(String title, View action) {
+    /** Line icon from res/drawable, tinted (design v4 section 8). */
+    private ImageView icon(int res, int color, int sizeDp) {
+        ImageView v = new ImageView(this);
+        v.setImageResource(res);
+        v.setImageTintList(ColorStateList.valueOf(color));
+        v.setLayoutParams(new LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp)));
+        v.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        return v;
+    }
+
+    /** 48 dp touch target around a 24 dp icon. */
+    private ImageView iconButton(int res, String spoken, View.OnClickListener l) {
+        ImageView v = icon(res, T.ink, 24);
+        v.setPadding(dp(12), dp(12), dp(12), dp(12));
+        v.setLayoutParams(new LinearLayout.LayoutParams(dp(48), dp(48)));
+        v.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+        v.setContentDescription(spoken);
+        v.setBackground(pressable(T.transparent, 24));
+        v.setClickable(true);
+        v.setOnClickListener(l);
+        return v;
+    }
+
+    /** Sub-page header (v4 section 7): back arrow, optional action, large serif title, then the hint. */
+    private LinearLayout subPage(String title, View action, boolean hint) {
         LinearLayout c = column();
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setMinimumHeight(dp(56));
-        Button back = textBtn("‹", v -> showPage(HOME));
-        back.setTextSize(28);
-        back.setTextColor(T.ink);
-        back.setContentDescription("Back");
-        row.addView(back, new LinearLayout.LayoutParams(dp(44), dp(48)));
-        row.addView(text(title, 22, Tok.MEDIUM, T.ink), new LinearLayout.LayoutParams(0, -2, 1f));
+        row.addView(iconButton(R.drawable.ic_back, "Back", v -> showPage(HOME)));
+        row.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
         if (action != null) row.addView(action);
         c.addView(row);
-        TextView hint = caption("Not connected. Values are from the headphones once you connect.");
-        hint.setPadding(0, 0, 0, dp(12));
-        pageHints.add(hint);
-        c.addView(hint);
+        TextView t = text(title, 32, Tok.SERIF, T.ink);
+        t.setPadding(dp(4), dp(4), 0, dp(8));
+        c.addView(t);
+        if (hint) {
+            TextView h = caption("Not connected. Values are from the headphones once you connect.");
+            h.setPadding(dp(4), 0, 0, dp(8));
+            pageHints.add(h);
+            c.addView(h);
+        }
         return c;
     }
 
     private final List<TextView> pageHints = new ArrayList<>();
+    private final List<View> dimmed = new ArrayList<>();          // alpha only when disconnected, still tappable
 
-    // ---- Home
+    // ---- grouped rows (v4 section 7)
+
+    /** Small grey label, then a group whose rows are separate surface rects 2 dp apart. Call shapeGroup after filling. */
+    private LinearLayout group(LinearLayout parent, String label) {
+        if (label != null) {
+            TextView l = label(label);
+            l.setPadding(dp(4), dp(20), 0, dp(8));
+            parent.addView(l);
+        }
+        LinearLayout g = new LinearLayout(this);
+        g.setOrientation(LinearLayout.VERTICAL);
+        parent.addView(g);
+        return g;
+    }
+
+    /** Row: icon, title (+ subtitle). Returns the row; the caller adds a value, switch or chevron at the end. */
+    private LinearLayout row(LinearLayout g, int iconRes, String title, String sub) {
+        LinearLayout r = new LinearLayout(this);
+        r.setGravity(Gravity.CENTER_VERTICAL);
+        r.setMinimumHeight(dp(64));
+        r.setPadding(dp(16), dp(10), dp(12), dp(10));
+        if (iconRes != 0) {
+            ImageView i = icon(iconRes, T.ink2, 18);
+            ((LinearLayout.LayoutParams) i.getLayoutParams()).rightMargin = dp(14);
+            r.addView(i);
+        }
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        texts.addView(text(title, 15, Tok.REGULAR, T.ink));
+        if (sub != null) texts.addView(caption(sub));
+        r.addView(texts, new LinearLayout.LayoutParams(0, -2, 1f));
+        g.addView(r);
+        return r;
+    }
+
+    private ImageView chevron() { return icon(R.drawable.ic_chevron, T.ink2, 18); }
+
+    private LinearLayout navRow(LinearLayout g, int iconRes, String title, String sub, View.OnClickListener l) {
+        LinearLayout r = row(g, iconRes, title, sub);
+        r.addView(chevron());
+        r.setClickable(true);
+        r.setOnClickListener(l);
+        return r;
+    }
+
+    private Switch switchRowG(LinearLayout g, int iconRes, String title, String sub, OnBool onChange) {
+        LinearLayout r = row(g, iconRes, title, sub);
+        Switch s = new Switch(this);
+        tintSwitch(s);
+        s.setContentDescription(title);
+        s.setOnCheckedChangeListener((b, checked) -> { if (!applying) onChange.on(checked); updateListenTile(); });
+        r.addView(s);
+        return s;
+    }
+
+    private TextView valueRowG(LinearLayout g, int iconRes, String title) {
+        LinearLayout r = row(g, iconRes, title, null);
+        TextView v = text(NOT_READ, 15, Tok.MONO, T.ink2);
+        v.setFontFeatureSettings(Tok.TABULAR);
+        r.addView(v);
+        return v;
+    }
+
+    /** Outer corners 18 dp, inner 6 dp, 2 dp gaps; clickable rows get a pressed state. */
+    private void shapeGroup(LinearLayout g) {
+        int n = g.getChildCount();
+        for (int i = 0; i < n; i++) {
+            View v = g.getChildAt(i);
+            float tr = i == 0 ? 18 : 6, br = i == n - 1 ? 18 : 6;
+            float[] radii = {dp(tr), dp(tr), dp(tr), dp(tr), dp(br), dp(br), dp(br), dp(br)};
+            GradientDrawable base = new GradientDrawable();
+            base.setColor(T.surface); base.setCornerRadii(radii);
+            if (v.isClickable()) {
+                GradientDrawable pressed = new GradientDrawable();
+                pressed.setColor(Tok.mix(T.surface, T.ink, 0.08f)); pressed.setCornerRadii(radii);
+                StateListDrawable sld = new StateListDrawable();
+                sld.addState(new int[]{android.R.attr.state_pressed}, pressed);
+                sld.addState(new int[]{}, base);
+                v.setBackground(sld);
+            } else {
+                v.setBackground(base);
+            }
+            LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) v.getLayoutParams();
+            if (lp == null) lp = new LinearLayout.LayoutParams(-1, -2);
+            lp.width = -1;
+            lp.topMargin = i == 0 ? 0 : dp(2);
+            v.setLayoutParams(lp);
+        }
+    }
+
+    private StateListDrawable pressable(int fill, float radiusDp) {
+        StateListDrawable sld = new StateListDrawable();
+        sld.addState(new int[]{android.R.attr.state_pressed}, rounded(Tok.mix(fill == T.transparent ? T.bg : fill, T.ink, 0.10f), radiusDp, 0, 0));
+        sld.addState(new int[]{}, rounded(fill, radiusDp, 0, 0));
+        return sld;
+    }
+
+    private LinearLayout panel() {
+        LinearLayout c = new LinearLayout(this);
+        c.setOrientation(LinearLayout.VERTICAL);
+        c.setBackground(rounded(T.surface, 18, 0, 0));
+        c.setPadding(dp(16), dp(16), dp(16), dp(16));
+        return c;
+    }
+
+    // ---- Home (v4 section 5)
 
     private View homePage() {
         LinearLayout c = column();
 
-        // 1. status row: pilot dot + "MOMENTUM 4 · CONNECTED", Connect / Disconnect pill
-        LinearLayout st = new LinearLayout(this);
-        st.setGravity(Gravity.CENTER_VERTICAL);
-        st.setMinimumHeight(dp(52));
-        statusLine = label("");
-        statusLine.setTextSize(12);
-        st.addView(statusLine, new LinearLayout.LayoutParams(0, -2, 1f));
-        connectBtn = baseBtn("Connect", v -> { if (socket != null) disconnect(); else connect(); });
-        connectBtn.setPadding(dp(20), 0, dp(20), 0);
-        st.addView(connectBtn, new LinearLayout.LayoutParams(-2, dp(40)));
-        c.addView(st);
-        statusDetail = caption("");
-        statusDetail.setVisibility(View.GONE);
-        c.addView(statusDetail);
+        LinearLayout top = new LinearLayout(this);
+        top.setGravity(Gravity.END);
+        top.addView(iconButton(R.drawable.ic_cog, "Settings", v -> showPage(DEVICE)));
+        c.addView(top);
 
-        // 2. hero: battery in dot numerals, firmware on the right
         LinearLayout hero = new LinearLayout(this);
-        hero.setPadding(0, dp(24), 0, dp(8));
-        LinearLayout bat = new LinearLayout(this);
-        bat.setOrientation(LinearLayout.VERTICAL);
+        hero.setOrientation(LinearLayout.VERTICAL);
+        hero.setGravity(Gravity.CENTER_HORIZONTAL);
         batteryDots = new DotNumerals(this, T, 7, 2);
         batteryDots.set("--", false, "Battery not read");
-        bat.addView(batteryDots);
-        batteryLabel = label("BATTERY · NOT READ");
-        batteryLabel.setPadding(0, dp(10), 0, 0);
-        bat.addView(batteryLabel);
-        hero.addView(bat, new LinearLayout.LayoutParams(0, -2, 1f));
-        heroFw = text("", 16, Tok.MONO, T.ink2);
-        hero.addView(heroFw);
-        c.addView(hero);
+        hero.addView(batteryDots);
+        heroName = text("MOMENTUM 4", 26, Tok.SERIF, T.ink);
+        heroName.setPadding(0, dp(14), 0, dp(2));
+        hero.addView(heroName);
+        statusLine = text("", 13, Tok.REGULAR, T.ink2);
+        statusLine.setGravity(Gravity.CENTER);
+        hero.addView(statusLine);
+        statusDetail = caption("");
+        statusDetail.setGravity(Gravity.CENTER);
+        statusDetail.setVisibility(View.GONE);
+        hero.addView(statusDetail);
+        connectBtn = baseBtn("Connect", v -> { if (socket != null) disconnect(); else connect(); });
+        connectBtn.setTextSize(14);
+        connectBtn.setPadding(dp(22), 0, dp(22), 0);
+        LinearLayout.LayoutParams cbp = new LinearLayout.LayoutParams(-2, dp(40));
+        cbp.topMargin = dp(12);
+        hero.addView(connectBtn, cbp);
+        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, -2);
+        hp.bottomMargin = dp(24);
+        c.addView(hero, hp);
 
-        // 3. noise control
-        c.addView(sectionLabel("NOISE CONTROL"));
+        // Noise control card: 3 round buttons. Same frames, same order as Smart Control Plus (docs/config-spec.md, capture 2).
+        LinearLayout nc = panel();
+        nc.addView(text("Noise control", 15, Tok.MEDIUM, T.ink));
         noiseHint = caption("Connect to change settings.");
-        noiseHint.setPadding(0, 0, 0, dp(8));
-        c.addView(noiseHint);
-        // Same frames, same order as Smart Control Plus (docs/config-spec.md, capture 2).
-        noise = new Segmented(new String[]{"Adaptive", "Custom", "Off"}, 56, idx -> {
+        noiseHint.setPadding(0, dp(2), 0, 0);
+        nc.addView(noiseHint);
+        noise = new RoundChoice(new String[]{"Adaptive", "Custom", "Off"},
+                new int[]{R.drawable.ic_adaptive, R.drawable.ic_custom, R.drawable.ic_off}, idx -> {
             if (idx == 0) { send(a(0x1A04, 1)); send(b2(0x1A00, 3, 1)); ancOn = true; adaptiveOn = true; }
             else if (idx == 1) {
                 send(b2(0x1A00, 3, 0)); send(a(0x1A04, 1)); send(a(0x1A02, transpSeek.getProgress()));
@@ -303,12 +437,15 @@ public class MainActivity extends Activity {
             customBlock.setVisibility(idx == 1 ? View.VISIBLE : View.GONE);
             Widgets.setNoise(this, idx);
         });
-        c.addView(noise.view);
+        LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(-1, -2);
+        np.topMargin = dp(14);
+        nc.addView(noise.view, np);
         LinearLayout b = new LinearLayout(this);
         b.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-        lp.topMargin = dp(12);
-        b.setLayoutParams(lp);
+        View hl = hairline();
+        LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(-1, Math.max(1, dp(1)));
+        hlp.topMargin = dp(14);
+        b.addView(hl, hlp);
         TextView[] tv = new TextView[1];
         transpSeek = slider(b, "ANC to transparency", 100, tv,
                 p -> p == 0 ? "full ANC" : p == 100 ? "full transparency" : String.valueOf(p),
@@ -318,165 +455,136 @@ public class MainActivity extends Activity {
         ends.addView(caption("ANC"), new LinearLayout.LayoutParams(0, -2, 1f));
         ends.addView(caption("Transparency"));
         b.addView(ends);
-        TextView aw = sectionLabel("ANTI-WIND");
-        aw.setPadding(0, dp(16), 0, dp(8));
+        TextView aw = label("Anti-wind");
+        aw.setPadding(0, dp(14), 0, dp(8));
         b.addView(aw);
         // UI order Off/Auto/Max; wire values 0 = off, 1 = Max, 2 = Auto (T17, confirmed on hardware)
-        antiWind = new Segmented(new String[]{"Off", "Auto", "Max"}, 44, idx -> send(b2(0x1A00, 1, antiWindSwap(idx))));
+        antiWind = new Segmented(new String[]{"Off", "Auto", "Max"}, 38, idx -> send(b2(0x1A00, 1, antiWindSwap(idx))));
         b.addView(antiWind.view);
         customBlock = b;
         customBlock.setVisibility(View.GONE);
-        c.addView(customBlock);
+        nc.addView(customBlock);
+        c.addView(nc);
 
-        // 4. auto power-off
-        LinearLayout gl = new LinearLayout(this);
-        gl.setGravity(Gravity.CENTER_VERTICAL);
-        gl.addView(sectionLabel("AUTO POWER-OFF"), new LinearLayout.LayoutParams(0, -2, 1f));
-        guardDot = text("", 14, Tok.REGULAR, T.pilot);
-        gl.addView(guardDot);
-        LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(-1, -2);
-        glp.topMargin = dp(32);
-        c.addView(gl, glp);
-        c.addView(guardPanel());
-
-        // 5. tiles
+        // Tiles: 2 columns, 4 dp gaps (v4 5.4)
+        tileSound = tileSub("not read");
+        tileListen = tileSub("not read");
+        tileGuardSub = tileSub("Off");
+        tileDevice = tileSub("not read");
         LinearLayout r1 = new LinearLayout(this), r2 = new LinearLayout(this);
-        tileSound = tileMain("not read");
-        tileListen = tileMain("not read");
-        tileDevice = tileMain("not read");
-        tileDeviceSub = caption("");
-        TextView pw = tileMain("Power off");
-        pw.setTextColor(T.danger);
-        r1.addView(tile("SOUND", tileSound, null, v -> showPage(SOUND)), tileLp(true));
-        r1.addView(tile("LISTENING", tileListen, null, v -> showPage(LISTENING)), tileLp(false));
-        r2.addView(tile("DEVICE", tileDevice, tileDeviceSub, v -> showPage(DEVICE)), tileLp(true));
-        View powerTile = tile("POWER OFF", pw, null, v -> powerOffNow());
-        gate(powerTile);
-        r2.addView(powerTile, tileLp(false));
+        View eqTile = tile("Equaliser", tileSound, R.drawable.ic_eq, null, v -> showPage(SOUND));
+        View lsTile = tile("Listening", tileListen, R.drawable.ic_ear, null, v -> showPage(LISTENING));
+        dimmed.add(eqTile); dimmed.add(lsTile);
+        guardSwitch = new Switch(this);
+        tintSwitch(guardSwitch);
+        guardSwitch.setContentDescription("Auto power-off");
+        guardSwitch.setOnCheckedChangeListener((sw, on) -> { if (!guardApplying && on != AutoOffService.running) toggleGuard(); });
+        View gTile = tile("Auto power-off", tileGuardSub, R.drawable.ic_moon, guardSwitch, v -> showPage(GUARD));
+        guardIcon = lastTileIcon;
+        View dTile = tile("Device", tileDevice, R.drawable.ic_headphones, null, v -> showPage(DEVICE));
+        r1.addView(eqTile, tileLp(true));
+        r1.addView(lsTile, tileLp(false));
+        r2.addView(gTile, tileLp(true));
+        r2.addView(dTile, tileLp(false));
         LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(-1, -2);
-        rp.topMargin = dp(32);
+        rp.topMargin = dp(4);
         c.addView(r1, rp);
         LinearLayout.LayoutParams rp2 = new LinearLayout.LayoutParams(-1, -2);
-        rp2.topMargin = dp(12);
+        rp2.topMargin = dp(4);
         c.addView(r2, rp2);
+
+        // "Power off now" row
+        LinearLayout pw = new LinearLayout(this);
+        pw.setGravity(Gravity.CENTER_VERTICAL);
+        pw.setPadding(dp(16), 0, dp(12), 0);
+        pw.setBackground(pressable(T.surface, 18));
+        pw.setClickable(true);
+        pw.setContentDescription("Power off now");
+        pw.setOnClickListener(v -> powerOffNow());
+        ImageView pi = icon(R.drawable.ic_power, T.danger, 20);
+        ((LinearLayout.LayoutParams) pi.getLayoutParams()).rightMargin = dp(14);
+        pw.addView(pi);
+        pw.addView(text("Power off now", 15, Tok.MEDIUM, T.danger), new LinearLayout.LayoutParams(0, -2, 1f));
+        pw.addView(chevron());
+        gate(pw);
+        LinearLayout.LayoutParams pwp = new LinearLayout.LayoutParams(-1, dp(60));
+        pwp.topMargin = dp(4);
+        c.addView(pw, pwp);
         return c;
     }
 
+    private ImageView lastTileIcon;
+
     private LinearLayout.LayoutParams tileLp(boolean left) {
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(104), 1f);
-        if (left) p.rightMargin = dp(6); else p.leftMargin = dp(6);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(150), 1f);
+        if (left) p.rightMargin = dp(2); else p.leftMargin = dp(2);
         return p;
     }
 
-    private TextView tileMain(String s) {
-        TextView t = text(s, 16, Tok.MEDIUM, T.ink);
-        t.setMaxLines(1);
+    private TextView tileSub(String s) {
+        TextView t = caption(s);
+        t.setMaxLines(2);
         t.setEllipsize(android.text.TextUtils.TruncateAt.END);
         return t;
     }
 
-    private View tile(String title, TextView main, TextView sub, View.OnClickListener l) {
+    /** Nothing X tile: title top-left, subtitle under it, optional switch bottom-left, tiny icon bottom-right. */
+    private View tile(String title, TextView sub, int iconRes, Switch sw, View.OnClickListener l) {
         LinearLayout t = new LinearLayout(this);
         t.setOrientation(LinearLayout.VERTICAL);
-        t.setPadding(dp(16), dp(14), dp(16), dp(14));
-        StateListDrawable sld = new StateListDrawable();
-        sld.addState(new int[]{android.R.attr.state_pressed}, rounded(Tok.mix(T.surface, T.ink, 0.08f), 24, 0, 0));
-        sld.addState(new int[]{}, rounded(T.surface, 24, 0, 0));
-        t.setBackground(sld);
+        t.setPadding(dp(16), dp(14), dp(14), dp(14));
+        t.setBackground(pressable(T.surface, 18));
         t.setClickable(true);
         t.setOnClickListener(l);
         t.setContentDescription(title);
-        t.addView(label(title), new LinearLayout.LayoutParams(-1, 0, 1f));
-        t.addView(main);
-        if (sub != null) t.addView(sub);
+        t.addView(text(title, 15, Tok.MEDIUM, T.ink));
+        sub.setPadding(0, dp(2), 0, 0);
+        t.addView(sub);
+        t.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1f));
+        LinearLayout bottom = new LinearLayout(this);
+        bottom.setGravity(Gravity.CENTER_VERTICAL);
+        if (sw != null) bottom.addView(sw);
+        bottom.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
+        lastTileIcon = icon(iconRes, T.ink2, 18);
+        bottom.addView(lastTileIcon);
+        t.addView(bottom, new LinearLayout.LayoutParams(-1, dp(32)));
         return t;
     }
 
-    private View guardPanel() {
-        LinearLayout c = new LinearLayout(this);
-        c.setOrientation(LinearLayout.VERTICAL);
-        c.setBackground(rounded(T.surface, 24, 0, 0));
-        c.setPadding(dp(16), dp(16), dp(16), dp(12));
-        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2);
-        cp.topMargin = dp(8);
-        c.setLayoutParams(cp);
-
-        LinearLayout top = new LinearLayout(this);
-        top.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout left = new LinearLayout(this);
-        left.setOrientation(LinearLayout.VERTICAL);
-        guardDots = new DotNumerals(this, T, 7, 2);
-        guardDots.set("OFF", false, "Guard off");
-        left.addView(guardDots);
-        guardUnit = label("MIN IDLE");
-        guardUnit.setPadding(0, dp(10), 0, 0);
-        left.addView(guardUnit);
-        top.addView(left, new LinearLayout.LayoutParams(0, -2, 1f));
-        guardButton = baseBtn("Start guard", v -> toggleGuard());
-        guardButton.setPadding(dp(20), 0, dp(20), 0);
-        top.addView(guardButton, new LinearLayout.LayoutParams(-2, dp(48)));
-        c.addView(top);
-
-        guardStatus = caption("");
-        guardStatus.setPadding(0, dp(12), 0, 0);
-        c.addView(guardStatus);
-        guardTarget = caption("");
-        guardTarget.setPadding(0, dp(4), 0, 0);
-        c.addView(guardTarget);
-
-        // settings: collapsed one-liner, expands in place (the guard is the app's main job, so it stays on Home)
-        LinearLayout settings = new LinearLayout(this);
-        settings.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout row = new LinearLayout(this);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setMinimumHeight(dp(52));
-        row.addView(body("Idle time"), new LinearLayout.LayoutParams(0, -2, 1f));
-        idleMinutes = field(InputType.TYPE_CLASS_NUMBER, "");
-        idleMinutes.setText(String.valueOf(prefs.getInt("minutes", 15)));
-        idleMinutes.setGravity(Gravity.CENTER);
-        idleMinutes.setFontFeatureSettings(Tok.TABULAR);
-        row.addView(idleMinutes, new LinearLayout.LayoutParams(dp(72), dp(44)));
-        TextView mins = body("min");
-        mins.setPadding(dp(8), 0, 0, 0);
-        row.addView(mins);
-        settings.addView(row);
-        swAutoStart = switchRow(settings, "Start the guard when the app opens", null, on -> {
-            prefs.edit().putBoolean("autostart", on).apply();
-            refreshGuardSummary();
-        });
-        settings.addView(caption("Idle means the phone plays nothing and has no call. If you wear them in silence past the time, they switch off. Wake them with the button."));
-        settings.setVisibility(View.GONE);
-
-        LinearLayout sum = new LinearLayout(this);
-        sum.setGravity(Gravity.CENTER_VERTICAL);
-        sum.setMinimumHeight(dp(44));
-        guardSummary = caption("");
-        sum.addView(guardSummary, new LinearLayout.LayoutParams(0, -2, 1f));
-        TextView chev = text("›", 18, Tok.REGULAR, T.ink2);
-        sum.addView(chev);
-        sum.setOnClickListener(v -> {
-            boolean show = settings.getVisibility() == View.GONE;
-            settings.setVisibility(show ? View.VISIBLE : View.GONE);
-            chev.setText(show ? "⌄" : "›");
-        });
-        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, -2);
-        sp.topMargin = dp(4);
-        c.addView(sum, sp);
-        c.addView(settings);
-        return c;
+    /** Equaliser-page tile with a switch (Bass boost, Speech clarity; v4 6.5). */
+    private Switch tileSwitch(LinearLayout parent, boolean left, int iconRes, String title, OnBool onChange) {
+        TextView sub = tileSub("Off");
+        Switch s = new Switch(this);
+        tintSwitch(s);
+        s.setContentDescription(title);
+        s.setOnCheckedChangeListener((b, checked) -> { sub.setText(checked ? "On" : "Off"); if (!applying) onChange.on(checked); });
+        View t = tile(title, sub, iconRes, s, v -> { if (s.isEnabled()) s.toggle(); });
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(120), 1f);
+        if (left) p.rightMargin = dp(2); else p.leftMargin = dp(2);
+        parent.addView(t, p);
+        return s;
     }
 
-    /** "Idle time 15 min · Starts with the app" (collapsed guard settings line). */
+    /** Device tile subtitle "M4AEBT · hw 4", from whatever has been read. */
+    private void updateDeviceTile() {
+        if (tileDevice == null) return;
+        if (modelText == null && hwText == null) { tileDevice.setText(NOT_READ); return; }
+        tileDevice.setText((modelText == null ? "MOMENTUM 4" : modelText) + (hwText == null ? "" : " · hw " + hwText));
+    }
+
+    /** Guard tile subtitle and icon: copper "Armed · 15 min" while running. */
     private void refreshGuardSummary() {
-        if (guardSummary == null) return;
-        guardSummary.setText("Idle time " + prefs.getInt("minutes", 15) + " min · "
-                + (prefs.getBoolean("autostart", false) ? "Starts with the app" : "Start by hand"));
+        if (tileGuardSub == null) return;
+        boolean on = AutoOffService.running;
+        tileGuardSub.setText(on ? "Armed · " + prefs.getInt("minutes", 15) + " min" : "Off");
+        tileGuardSub.setTextColor(on ? T.copper : T.ink2);
+        if (guardIcon != null) guardIcon.setImageTintList(ColorStateList.valueOf(on ? T.copper : T.ink2));
     }
 
     @SuppressWarnings("MissingPermission")
     private void showDeviceName() {
         BluetoothDevice d = selectedDevice();
-        curName = d == null ? "M4" : (d.getName() == null ? d.getAddress() : d.getName());
+        curName = d == null ? "MOMENTUM 4" : (d.getName() == null ? d.getAddress() : d.getName());
         renderStatus();
         refreshGuardTarget();
     }
@@ -494,14 +602,14 @@ public class MainActivity extends Activity {
         boolean m4 = isMomentum(d);
         guardTarget.setText(m4 ? "Switches off: " + nameOf(d)
                 : nameOf(d) + " is not a MOMENTUM 4. Pick the headphones on the Device page.");
-        guardTarget.setTextColor(m4 ? T.ink2 : T.danger);
+        guardTarget.setTextColor(m4 ? T.ink : T.danger);
     }
 
-    private String curName = "M4";
+    private String curName = "MOMENTUM 4", modelText, hwText, fwText;
     private int statusKind;
     private String statusText = "";
 
-    /** Status row: pilot dot (filled = live, hollow = not connected, faint = busy) + "NAME · STATE"; details below. */
+    /** Status line: pilot dot (filled = live, faint = connecting, hollow = not connected) + state + firmware. */
     private void setStatus(int kind, String s) {
         statusKind = kind;
         statusText = s;
@@ -512,75 +620,140 @@ public class MainActivity extends Activity {
         if (statusLine == null) return;
         String dot = statusKind == 1 ? "●" : statusKind == 2 ? "◌" : "○";
         int col = statusKind == 1 ? T.pilot : statusKind == 2 ? Tok.alpha(T.pilot, 0.4f) : T.ruleStrong;
-        String state = statusKind == 1 ? "CONNECTED" : statusKind == 2 ? "CONNECTING" : "NOT CONNECTED";
-        android.text.SpannableString sp = new android.text.SpannableString(dot + "  "
-                + curName.toUpperCase(Locale.ROOT) + " · " + state);
+        String state = statusKind == 1 ? "Connected" : statusKind == 2 ? "Connecting..." : "Not connected";
+        if (statusKind == 1 && fwText != null) state += " · fw " + fwText;
+        android.text.SpannableString sp = new android.text.SpannableString(dot + "  " + state);
         sp.setSpan(new android.text.style.ForegroundColorSpan(col), 0, 1, 0);
         statusLine.setText(sp);
+        heroName.setText(curName);
         boolean plain = statusText.isEmpty() || statusText.equals("Connected") || statusText.equals("Not connected")
                 || statusText.equals("Connecting...");
         statusDetail.setText(plain ? "" : statusText);
         statusDetail.setVisibility(plain ? View.GONE : View.VISIBLE);
     }
 
-    // ---- Device page
+    // ---- Device page (v4 section 7)
 
     private View devicePage() {
         Button refresh = textBtn("Refresh", v -> readAllConfig());
         gate(refresh);
-        LinearLayout c = subPage("Device", refresh);
+        LinearLayout c = subPage("Device", refresh, true);
 
+        LinearLayout hp = group(c, "Headphones");
         LinearLayout pick = new LinearLayout(this);
         pick.setGravity(Gravity.CENTER_VERTICAL);
-        pick.setMinimumHeight(dp(52));
-        TextView hp = body("Headphones");
-        hp.setTextColor(T.ink2);
-        pick.addView(hp);
+        pick.setMinimumHeight(dp(64));
+        pick.setPadding(dp(16), dp(6), dp(8), dp(6));
+        ImageView hi = icon(R.drawable.ic_headphones, T.ink2, 18);
+        ((LinearLayout.LayoutParams) hi.getLayoutParams()).rightMargin = dp(6);
+        pick.addView(hi);
+        LinearLayout pt = new LinearLayout(this);
+        pt.setOrientation(LinearLayout.VERTICAL);
         deviceSpinner = new Spinner(this);
         deviceSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
             public void onItemSelected(android.widget.AdapterView<?> p, View v, int pos, long id) { showDeviceName(); }
             public void onNothingSelected(android.widget.AdapterView<?> p) { showDeviceName(); }
         });
-        pick.addView(deviceSpinner, new LinearLayout.LayoutParams(0, -2, 1f));
-        pick.addView(textBtn("Rescan", v -> rescan()));
-        c.addView(pick);
+        pt.addView(deviceSpinner);
+        TextView ps = caption("Tap to choose another paired device");
+        ps.setPadding(dp(8), 0, 0, 0);
+        pt.addView(ps);
+        pick.addView(pt, new LinearLayout.LayoutParams(0, -2, 1f));
+        hp.addView(pick);
+        navRow(hp, R.drawable.ic_refresh, "Rescan", "Look again for paired headphones", v -> rescan());
+        shapeGroup(hp);
 
-        LinearLayout vals = card(null, false);
-        vBattery = valueRow(vals, "Battery");
-        vModel = valueRow(vals, "Model");
-        vFirmware = valueRow(vals, "Firmware");
-        vHardware = valueRow(vals, "Hardware");
-        c.addView(cardWrap(vals));
-        c.addView(textBtn("Guard log", v -> append(AutoOffService.getLog())));
-        Button report = outlineBtn("Copy report", v -> copyReport());
-        LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(-1, dp(48));
-        rp.topMargin = dp(8);
-        c.addView(report, rp);
-        TextView rc = caption("For bug reports and community testing. No Bluetooth addresses, no other device names.");
-        rc.setPadding(0, dp(6), 0, dp(8));
-        c.addView(rc);
-        c.addView(advancedCard());
+        LinearLayout info = group(c, "Info");
+        vBattery = valueRowG(info, R.drawable.ic_bolt, "Battery");
+        vModel = valueRowG(info, R.drawable.ic_headphones, "Model");
+        vFirmware = valueRowG(info, R.drawable.ic_code, "Firmware");
+        vHardware = valueRowG(info, R.drawable.ic_info, "Hardware");
+        shapeGroup(info);
+
+        LinearLayout tools = group(c, "Tools");
+        navRow(tools, R.drawable.ic_list, "Guard log", "Shows in the log below", v -> append(AutoOffService.getLog()));
+        navRow(tools, R.drawable.ic_report, "Copy report", "For bug reports. No Bluetooth addresses, no other device names.", v -> copyReport());
+        shapeGroup(tools);
+
+        View adv = advancedCard();
+        LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-1, -2);
+        ap.topMargin = dp(16);
+        c.addView(adv, ap);
         c.addView(logCard());
         return c;
     }
 
-    /** Labelled fader that sends only on release. tvOut[0] receives the value label. */
+    // ---- Auto power-off page (v4 section 7)
+
+    private View guardPage() {
+        LinearLayout c = subPage("Auto power-off", null, false);
+
+        LinearLayout big = new LinearLayout(this);
+        big.setOrientation(LinearLayout.VERTICAL);
+        big.setPadding(dp(4), dp(8), 0, dp(4));
+        guardDots = new DotNumerals(this, T, 7, 2);
+        guardDots.set("OFF", false, "Guard off");
+        big.addView(guardDots);
+        guardUnit = caption("minutes idle, then fully off");
+        guardUnit.setPadding(0, dp(10), 0, 0);
+        big.addView(guardUnit);
+        c.addView(big);
+
+        LinearLayout st = group(c, "Status");
+        LinearLayout s1 = row(st, R.drawable.ic_moon, "", null);
+        guardStatus = (TextView) ((LinearLayout) s1.getChildAt(1)).getChildAt(0);
+        LinearLayout s2 = row(st, R.drawable.ic_headphones, "", null);
+        guardTarget = (TextView) ((LinearLayout) s2.getChildAt(1)).getChildAt(0);
+        shapeGroup(st);
+
+        LinearLayout set = group(c, "Settings");
+        LinearLayout it = row(set, R.drawable.ic_clock, "Idle time", null);
+        idleMinutes = field(InputType.TYPE_CLASS_NUMBER, "");
+        idleMinutes.setText(String.valueOf(prefs.getInt("minutes", 15)));
+        idleMinutes.setGravity(Gravity.CENTER);
+        idleMinutes.setFontFeatureSettings(Tok.TABULAR);
+        idleMinutes.setContentDescription("Idle time in minutes");
+        it.addView(idleMinutes, new LinearLayout.LayoutParams(dp(64), dp(40)));
+        TextView mins = caption("min");
+        mins.setPadding(dp(8), 0, 0, 0);
+        it.addView(mins);
+        swAutoStart = switchRowG(set, R.drawable.ic_play, "Start the guard when the app opens", null, on -> {
+            prefs.edit().putBoolean("autostart", on).apply();
+            refreshGuardSummary();
+        });
+        shapeGroup(set);
+
+        guardButton = baseBtn("Start guard", v -> toggleGuard());
+        guardButton.setAllCaps(true);
+        guardButton.setLetterSpacing(0.06f);
+        LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(-1, dp(52));
+        gp.topMargin = dp(24);
+        c.addView(guardButton, gp);
+        TextView cap = caption("Idle means the phone plays nothing and has no call. If you wear them in silence past the time, they switch off. Wake them with the button.");
+        cap.setPadding(dp(4), dp(12), dp(4), 0);
+        c.addView(cap);
+        return c;
+    }
+
+    /** Labelled fader that sends only on release (transparency and call sliders). tvOut[0] receives the value label. */
     private SeekBar slider(LinearLayout parent, String label, int max, TextView[] tvOut, IntLabel fmt, OnInt onRelease) {
         LinearLayout cap = new LinearLayout(this);
         cap.setGravity(Gravity.CENTER_VERTICAL);
         cap.setPadding(0, dp(8), 0, 0);
-        cap.addView(body(label), new LinearLayout.LayoutParams(0, -2, 1f));
-        TextView val = text("", 16, Tok.MONO, T.ink);
+        cap.addView(text(label, 15, Tok.REGULAR, T.ink), new LinearLayout.LayoutParams(0, -2, 1f));
+        TextView val = text("", 14, Tok.MONO, T.ink2);
+        val.setFontFeatureSettings(Tok.TABULAR);
         cap.addView(val);
         parent.addView(cap);
         SeekBar s = new SeekBar(this);
         s.setMax(max);
         float density = getResources().getDisplayMetrics().density;
         s.setProgressDrawable(new FaderTrack(T, density, max == 120, max == 4 ? 4 : max == 100 ? 4 : 0));
-        GradientDrawable cap6 = rounded(T.ink, 6, T.bg, 2);
-        cap6.setSize(dp(14), dp(24));
+        GradientDrawable cap6 = rounded(T.faderCap, 7, T.faderEdge, 1.5f);
+        cap6.setSize(dp(16), dp(26));
         s.setThumb(cap6);
         s.setSplitTrack(false);
+        s.setContentDescription(label);
         s.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             public void onProgressChanged(SeekBar sb, int p, boolean user) { val.setText(fmt.f(p)); }
             public void onStartTrackingTouch(SeekBar sb) {}
@@ -593,76 +766,156 @@ public class MainActivity extends Activity {
         return s;
     }
 
-    // ---- Sound page
+    // ---- Equaliser page (v4 section 6)
 
     private View soundPage() {
-        Button flat = textBtn("Flat", v -> {
+        LinearLayout c = subPage("Equaliser", null, true);
+
+        eqFaders = new EqFaders(this, T);
+        eqFaders.setListener(new EqFaders.Listener() {
+            public void live(int[] g) { eqCurve.setGains(g); }
+            public void commit(List<int[]> changes) {
+                for (int[] ch : changes) { send(b2(0x1001, ch[0], ch[1])); eqGain[ch[0]] = ch[1]; }
+                eqCurve.setGains(eqGain);
+                markPreset();
+            }
+        });
+        gate(eqFaders);
+        c.addView(eqFaders, new LinearLayout.LayoutParams(-1, -2));
+
+        android.widget.FrameLayout strip = new android.widget.FrameLayout(this);
+        strip.setBackground(rounded(T.surface, 16, 0, 0));
+        eqCurve = new EqCurve(this, T);
+        strip.addView(eqCurve, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, dp(76));
+        sp.topMargin = dp(8);
+        c.addView(strip, sp);
+
+        // Poweramp preset row: Flat · preset name · ⋮ (app-side presets; the headset only stores the curve).
+        LinearLayout pr = new LinearLayout(this);
+        pr.setGravity(Gravity.CENTER_VERTICAL);
+        Button flat = baseBtn("Flat", v -> {
             for (int i = 0; i < 5; i++) send(b2(0x1001, i, 0));
             eqSync.curveWritten();
             setCurve(new int[5]);
         });
+        flat.setTextColor(T.ink);
+        flat.setBackground(pressable(T.sunk, 20));
+        flat.setPadding(dp(18), 0, dp(18), 0);
         gate(flat);
-        LinearLayout c = subPage("Sound", flat);
+        pr.addView(flat, new LinearLayout.LayoutParams(-2, dp(40)));
+        presetPill = baseBtn("Presets", v -> presetSheet());
+        presetPill.setTextColor(T.ink);
+        StateListDrawable pp = new StateListDrawable();
+        pp.addState(new int[]{android.R.attr.state_pressed}, rounded(Tok.alpha(T.ink, 0.08f), 20, T.ink2, 1.5f));
+        pp.addState(new int[]{}, rounded(T.transparent, 20, T.ink2, 1.5f));
+        presetPill.setBackground(pp);
+        gate(presetPill);
+        LinearLayout.LayoutParams ppl = new LinearLayout.LayoutParams(0, dp(40), 1f);
+        ppl.leftMargin = dp(8); ppl.rightMargin = dp(8);
+        pr.addView(presetPill, ppl);
+        ImageView more = iconButton(R.drawable.ic_more, "More", v -> moreMenu());
+        more.setBackground(rounded(T.transparent, 20, T.ink2, 1.5f));
+        more.setPadding(dp(8), dp(8), dp(8), dp(8));
+        gate(more);
+        pr.addView(more, new LinearLayout.LayoutParams(dp(40), dp(40)));
+        LinearLayout.LayoutParams prp = new LinearLayout.LayoutParams(-1, -2);
+        prp.topMargin = dp(12);
+        c.addView(pr, prp);
+        TextView hint = caption("Drag a fader, or sweep across all five. Double-tap resets a band to 0.");
+        hint.setPadding(dp(4), dp(10), 0, 0);
+        c.addView(hint);
 
-        eqCurve = new EqCurve(this, T);
-        LinearLayout.LayoutParams ep = new LinearLayout.LayoutParams(-1, dp(96));
-        ep.bottomMargin = dp(16);
-        c.addView(eqCurve, ep);
-
-        LinearLayout presetsBlock = new LinearLayout(this), bandsBlock = new LinearLayout(this);
-        presetsBlock.setOrientation(LinearLayout.VERTICAL);
-        bandsBlock.setOrientation(LinearLayout.VERTICAL);
-        Segmented mode = new Segmented(new String[]{"Presets", "Bands"}, 44, idx -> {
-            presetsBlock.setVisibility(idx == 0 ? View.VISIBLE : View.GONE);
-            bandsBlock.setVisibility(idx == 1 ? View.VISIBLE : View.GONE);
-        });
-        for (Button k : mode.buttons) { gated.remove(k); }   // a view switch, not a headset control
-        c.addView(mode.view);
-
-        // Smart Control Plus presets (app-side; the headset only stores the curve).
-        // Values from omarchy-momentum4 presets.json, checked against our own capture 2.
-        // Plus up to 5 custom presets saved on the phone (long-press a custom one to rename, overwrite or delete).
-        presetChips = new LinearLayout(this);
-        presetChips.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams pc = new LinearLayout.LayoutParams(-1, -2);
-        pc.topMargin = dp(16);
-        presetsBlock.addView(presetChips, pc);
-        Button save = textBtn("Save curve as custom preset", v -> saveCustomDialog());
-        gate(save);
-        presetsBlock.addView(save);
-        c.addView(presetsBlock);
-
-        for (int i = 0; i < 5; i++) {
-            final int band = i;
-            TextView[] tv = new TextView[1];
-            // 0..120 = -6.0..+6.0 dB in 0.1 dB steps (as in Smart Control); wire value = dB x 10, signed byte
-            eqSeek[i] = slider(bandsBlock, EQ_BANDS[i], 120, tv, p -> String.format(Locale.ROOT, "%+.1f dB", (p - 60) / 10.0),
-                    p -> { send(b2(0x1001, band, p - 60)); eqGain[band] = p - 60; eqCurve.setGains(eqGain); markPreset(); });
-            eqValue[i] = tv[0];
-            eqSeek[i].setProgress(60);
-        }
-        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, -2);
-        bp.topMargin = dp(8);
-        c.addView(bandsBlock, bp);
-        mode.select(0, true);
-        rebuildPresetChips();
-
-        View h = hairline();
-        LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(-1, Math.max(1, dp(1)));
-        hlp.topMargin = dp(16);
-        c.addView(h, hlp);
-        swBass = switchRow(c, "Bass boost", null, on -> toggle(0x1008, on));
-        swSpeech = switchRow(c, "Speech clarity", "Turn off Hi-Res 24/96 first.", on -> send(b2(0x0803, 0, on ? 2 : 1)));
+        LinearLayout tiles = new LinearLayout(this);
+        swBass = tileSwitch(tiles, true, R.drawable.ic_bass, "Bass boost", on -> toggle(0x1008, on));
+        swSpeech = tileSwitch(tiles, false, R.drawable.ic_speech, "Speech clarity", on -> send(b2(0x0803, 0, on ? 2 : 1)));
         gate(swBass); gate(swSpeech);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-1, -2);
+        tp.topMargin = dp(16);
+        c.addView(tiles, tp);
+        TextView note = caption("Speech clarity: turn off Hi-Res 24/96 first.");
+        note.setPadding(dp(4), dp(8), 0, 0);
+        note.setVisibility(View.GONE);
+        swSpeech.setTag(note);
+        c.addView(note);
+        markPreset();
         return c;
+    }
+
+    private void moreMenu() {
+        new AlertDialog.Builder(this, R.style.AlertTheme)
+                .setItems(new String[]{"Save current curve as a preset", "Flat"}, (d, w) -> {
+                    if (w == 0) saveCustomDialog();
+                    else {
+                        for (int i = 0; i < 5; i++) send(b2(0x1001, i, 0));
+                        eqSync.curveWritten();
+                        setCurve(new int[5]);
+                    }
+                })
+                .show();
+    }
+
+    /** Preset list (v4 6.4): curve thumbnail, slot number for custom ones, name, ✓ on the active one. */
+    private void presetSheet() {
+        android.app.Dialog dlg = new android.app.Dialog(this);
+        dlg.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(16), dp(20), dp(16), dp(16));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(T.surface);
+        bg.setCornerRadii(new float[]{dp(24), dp(24), dp(24), dp(24), 0, 0, 0, 0});
+        box.setBackground(bg);
+        TextView title = text("Presets", 24, Tok.SERIF, T.ink);
+        title.setPadding(dp(4), 0, 0, dp(12));
+        box.addView(title);
+        List<Presets.Preset> all = Presets.all(this);
+        int m = Presets.matching(this, eqGain);
+        for (int i = 0; i < all.size(); i++) {
+            Presets.Preset p = all.get(i);
+            boolean sel = i == m && eqSync.mayPublish();
+            LinearLayout r = new LinearLayout(this);
+            r.setGravity(Gravity.CENTER_VERTICAL);
+            r.setPadding(dp(12), 0, dp(12), 0);
+            r.setBackground(pressable(sel ? T.sunk : T.surface, 12));
+            r.setClickable(true);
+            r.setContentDescription(p.name + (sel ? ", selected" : ""));
+            ImageView th = new ImageView(this);
+            th.setImageBitmap(EqCurve.thumbnail(this, T, p.gains, 64, 24));
+            th.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            r.addView(th, new LinearLayout.LayoutParams(dp(64), dp(24)));
+            TextView slot = text(p.slot >= 0 ? String.valueOf(p.slot + 1) : "", 13, Tok.MONO, T.ink2);
+            slot.setGravity(Gravity.CENTER);
+            r.addView(slot, new LinearLayout.LayoutParams(dp(28), -2));
+            r.addView(text(p.name, 15, sel ? Tok.MEDIUM : Tok.REGULAR, T.ink), new LinearLayout.LayoutParams(0, -2, 1f));
+            if (sel) r.addView(text("✓", 16, Tok.MEDIUM, T.copper));
+            r.setOnClickListener(v -> { dlg.dismiss(); applyPreset(p); });
+            if (p.slot >= 0) r.setOnLongClickListener(v -> { dlg.dismiss(); manageCustomDialog(p); return true; });
+            box.addView(r, new LinearLayout.LayoutParams(-1, dp(52)));
+        }
+        Button save = textBtn("Save current curve as a preset", v -> { dlg.dismiss(); saveCustomDialog(); });
+        LinearLayout.LayoutParams svp = new LinearLayout.LayoutParams(-1, dp(48));
+        svp.topMargin = dp(8);
+        box.addView(save, svp);
+        TextView lp = caption("Long-press a custom preset to rename, overwrite or delete it.");
+        lp.setPadding(dp(4), dp(4), 0, 0);
+        box.addView(lp);
+        ScrollView sv = new ScrollView(this);
+        sv.addView(box);
+        dlg.setContentView(sv);
+        android.view.Window w = dlg.getWindow();
+        if (w != null) {
+            w.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(T.transparent));
+            w.setGravity(Gravity.BOTTOM);
+            w.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
+        dlg.show();
     }
 
     /** All five bands at once, then one preset match (no half-updated curve reaches the widgets). */
     private void setCurve(int[] gainsX10) {
-        for (int b = 0; b < 5; b++) {
-            eqGain[b] = gainsX10[b];
-            eqSeek[b].setProgress(Math.max(0, Math.min(120, gainsX10[b] + 60)));
-        }
+        for (int b = 0; b < 5; b++) eqGain[b] = Math.max(-60, Math.min(60, gainsX10[b]));
+        eqFaders.setGains(eqGain);
         eqCurve.setGains(eqGain);
         markPreset();
     }
@@ -680,56 +933,18 @@ public class MainActivity extends Activity {
         setCurve(p.gains);
     }
 
-    /** Presets as a 2-column grid of pill buttons: built-ins first, then custom ones with their slot number. */
-    private void rebuildPresetChips() {
-        presetChips.removeAllViews();
-        gated.removeAll(presetBtns);
-        presetBtns.clear();
-        presetNames.clear();
-        LinearLayout row = null;
-        List<Presets.Preset> all = Presets.all(this);
-        for (int i = 0; i < all.size(); i++) {
-            Presets.Preset p = all.get(i);
-            if (i % 2 == 0) {
-                row = new LinearLayout(this);
-                LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
-                if (i > 0) rl.topMargin = dp(8);
-                presetChips.addView(row, rl);
-            }
-            String label = p.slot < 0 ? p.name : (p.slot + 1) + " " + p.name;   // custom: slot number first
-            Button b = baseBtn(label, v -> applyPreset(p));
-            b.setTypeface(Tok.MEDIUM);
-            b.setTextSize(15);
-            if (p.slot >= 0) b.setOnLongClickListener(v -> { manageCustomDialog(p); return true; });
-            boolean on = out != null;
-            b.setEnabled(on); b.setAlpha(on ? 1f : DISABLED);
-            gate(b);
-            presetBtns.add(b);
-            presetNames.add(label);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(44), 1f);
-            if (i % 2 == 0) lp.rightMargin = dp(4); else lp.leftMargin = dp(4);
-            row.addView(b, lp);
-        }
-        if (all.size() % 2 == 1) row.addView(new View(this), new LinearLayout.LayoutParams(0, dp(44), 1f));
-        markPreset();
-    }
+    /** Presets live in the sheet now; after a save, rename or delete only the name pill and tiles need a refresh. */
+    private void rebuildPresetChips() { markPreset(); }
 
-    /** Highlight the preset whose curve matches exactly, like Smart Control does (pilot dot + ink fill). */
+    /** Name pill, Equaliser tile and widgets follow the preset whose curve matches exactly. */
     private void markPreset() {
-        if (presetChips == null) return;
+        if (presetPill == null) return;
         int m = Presets.matching(this, eqGain);
-        for (int i = 0; i < presetBtns.size(); i++) {
-            boolean sel = i == m;
-            Button b = presetBtns.get(i);
-            b.setBackground(rounded(sel ? T.ink : T.surface, 22, 0, 0));
-            b.setTextColor(sel ? T.onKey : T.ink);
-            b.setText(sel ? dotted(presetNames.get(i), T.pilotOnKey) : presetNames.get(i));
-        }
-        if (tileSound != null) {
-            if (!eqSync.mayPublish()) tileSound.setText("not read");
-            else tileSound.setText(m >= 0 ? dotted(Presets.all(this).get(m).name, T.pilot) : "Custom curve");
-        }
-        if (eqSync.mayPublish()) Widgets.setEqIdx(this, m);
+        String name = m >= 0 ? Presets.all(this).get(m).name : "Custom curve";
+        boolean known = eqSync.mayPublish();
+        presetPill.setText(known ? name : "Presets");
+        if (tileSound != null) tileSound.setText(known ? name : NOT_READ);
+        if (known) Widgets.setEqIdx(this, m);
     }
 
     private void saveCustomDialog() {
@@ -775,24 +990,35 @@ public class MainActivity extends Activity {
     /** Used by widgets/tiles while the app holds the link. */
     void sendFrame(byte[] frame) { send(frame); }
 
-    // ---- Listening page
+    // ---- Listening page (v4 section 7)
 
     private View listeningPage() {
-        LinearLayout c = subPage("Listening", null);
-        swSmartPause = switchRow(c, "Smart pause", null, on -> toggle(0x080C, on));
-        swAutoAnswer = switchRow(c, "Auto-answer calls", null, on -> toggle(0x080A, on));
-        swOnHead = switchRow(c, "On-head detection", null, on -> toggle(0x0400, on));
-        swLowLatency = switchRow(c, "Low latency", null, on -> toggle(0x0817, on));
-        swComfort = switchRow(c, "Comfort call", null, on -> toggle(0x0814, on));
-        swTouch = switchRow(c, "Touch controls", null, on -> send(a(0x1606, on ? 0 : 1)));   // inverted: 0 = enabled
-        gate(swComfort); gate(swTouch);
-        swHiRes = switchRow(c, "Hi-Res 24/96", "Takes effect after you restart the headphones.",
+        LinearLayout c = subPage("Listening", null, true);
+        LinearLayout pb = group(c, "Playback");
+        swSmartPause = switchRowG(pb, R.drawable.ic_pause, "Smart pause", "Pause when you take them off", on -> toggle(0x080C, on));
+        swLowLatency = switchRowG(pb, R.drawable.ic_bolt, "Low latency", null, on -> toggle(0x0817, on));
+        swHiRes = switchRowG(pb, R.drawable.ic_hires, "Hi-Res 24/96", "Takes effect after a restart",
                 on -> { send(a(0x0405, on ? 0 : 1)); send(g(0x0406)); applySpeechRule(); });   // 0 = Hi-Res on
-        gate(swSmartPause); gate(swAutoAnswer); gate(swOnHead); gate(swLowLatency); gate(swHiRes);
+        shapeGroup(pb);
+
+        LinearLayout calls = group(c, "Calls");
+        swAutoAnswer = switchRowG(calls, R.drawable.ic_call, "Auto-answer calls", null, on -> toggle(0x080A, on));
+        swComfort = switchRowG(calls, R.drawable.ic_ear, "Comfort call", null, on -> toggle(0x0814, on));
+        LinearLayout ct = new LinearLayout(this);
+        ct.setOrientation(LinearLayout.VERTICAL);
+        ct.setPadding(dp(16), dp(4), dp(16), dp(8));
         TextView[] tv = new TextView[1];
-        callSeek = slider(c, "Transparency during calls", 4, tv, p -> p == 0 ? "off" : p + " / 4",
+        callSeek = slider(ct, "Transparency during calls", 4, tv, p -> p == 0 ? "off" : p + " / 4",
                 p -> { send(a(0x0805, p)); send(g(0x0806)); });
         callValue = tv[0];
+        calls.addView(ct);
+        shapeGroup(calls);
+
+        LinearLayout hd = group(c, "Headphones");
+        swOnHead = switchRowG(hd, R.drawable.ic_head, "On-head detection", null, on -> toggle(0x0400, on));
+        swTouch = switchRowG(hd, R.drawable.ic_hand, "Touch controls", null, on -> send(a(0x1606, on ? 0 : 1)));   // inverted: 0 = enabled
+        shapeGroup(hd);
+        gate(swSmartPause); gate(swAutoAnswer); gate(swOnHead); gate(swLowLatency); gate(swHiRes); gate(swComfort); gate(swTouch);
         return c;
     }
 
@@ -800,14 +1026,13 @@ public class MainActivity extends Activity {
 
     /** Home tile: how many of the 7 listening switches are on (Hi-Res counts as a switch). */
     private void updateListenTile() {
-        if (tileListen == null || swHiRes == null) return;
-        if (!listenRead) { tileListen.setText("not read"); return; }
+        if (tileListen == null || swHiRes == null || swTouch == null) return;
+        if (!listenRead) { tileListen.setText(NOT_READ); return; }
         Switch[] all = {swSmartPause, swAutoAnswer, swOnHead, swLowLatency, swComfort, swTouch, swHiRes};
         int n = 0;
         for (Switch s : all) if (s.isChecked()) n++;
         tileListen.setText(n + " of " + all.length + " on");
     }
-
 
     private View advancedCard() {
         LinearLayout inner = new LinearLayout(this);
@@ -991,13 +1216,8 @@ public class MainActivity extends Activity {
 
     private TextView caption(String s) { return text(s, 13, Tok.REGULAR, T.ink2); }
 
-    /** v3 label: monospace caps, 11 sp, tracked, secondary ink. */
-    private TextView label(String s) {
-        TextView t = text(s, 11, Tok.CODE, T.ink2);
-        t.setLetterSpacing(0.12f);
-        t.setAllCaps(true);
-        return t;
-    }
+    /** v4 section label: small grey sentence case (mono caps dropped, design v4 section 4). */
+    private TextView label(String s) { return text(s, 13, Tok.REGULAR, T.ink2); }
 
     private TextView sectionLabel(String s) {
         TextView t = label(s);
@@ -1046,6 +1266,12 @@ public class MainActivity extends Activity {
         sld.addState(new int[]{android.R.attr.state_pressed}, rounded(Tok.alpha(T.ink, 0.08f), 24, T.ruleStrong, 1));
         sld.addState(new int[]{}, rounded(T.transparent, 24, T.ruleStrong, 1));
         b.setBackground(sld);
+        b.setTextColor(T.ink);
+    }
+
+    /** v4 "undo" side of a toggle (Disconnect, Stop guard): sunk pill, ink text. */
+    private void styleSunk(Button b) {
+        b.setBackground(pressable(T.sunk, 26));
         b.setTextColor(T.ink);
     }
 
@@ -1109,6 +1335,7 @@ public class MainActivity extends Activity {
         for (View v : gated) { v.setEnabled(on); v.setAlpha(on ? 1f : DISABLED); }
         if (noiseHint != null) noiseHint.setVisibility(on ? View.GONE : View.VISIBLE);
         for (TextView h : pageHints) h.setVisibility(on ? View.GONE : View.VISIBLE);
+        for (View v : dimmed) v.setAlpha(on ? 1f : DISABLED);
         applySpeechRule();
     }
 
@@ -1158,6 +1385,60 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** v4 noise buttons: 60 dp circles with an icon and a label under each; selected = ink circle. */
+    private final class RoundChoice {
+        final LinearLayout view;
+        final ImageView[] circles;
+        final TextView[] labels;
+        final OnInt onSelect;
+        int selected = -1;
+
+        RoundChoice(String[] opts, int[] icons, OnInt onSelect) {
+            this.onSelect = onSelect;
+            view = new LinearLayout(MainActivity.this);
+            circles = new ImageView[opts.length];
+            labels = new TextView[opts.length];
+            for (int i = 0; i < opts.length; i++) {
+                final int idx = i;
+                LinearLayout col = new LinearLayout(MainActivity.this);
+                col.setOrientation(LinearLayout.VERTICAL);
+                col.setGravity(Gravity.CENTER_HORIZONTAL);
+                ImageView c = new ImageView(MainActivity.this);
+                c.setImageResource(icons[i]);
+                c.setPadding(dp(18), dp(18), dp(18), dp(18));
+                c.setContentDescription(opts[i]);
+                c.setClickable(true);
+                c.setOnClickListener(v -> select(idx, true));
+                gate(c);
+                col.addView(c, new LinearLayout.LayoutParams(dp(60), dp(60)));
+                TextView l = text(opts[i], 13, Tok.REGULAR, T.ink2);
+                l.setPadding(0, dp(8), 0, 0);
+                l.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+                col.addView(l);
+                circles[i] = c; labels[i] = l;
+                view.addView(col, new LinearLayout.LayoutParams(0, -2, 1f));
+            }
+            paint();
+        }
+
+        void select(int i, boolean fire) {
+            selected = i;
+            paint();
+            if (fire) onSelect.on(i);
+        }
+
+        private void paint() {
+            for (int j = 0; j < circles.length; j++) {
+                boolean sel = j == selected;
+                circles[j].setBackground(pressable(sel ? T.ink : T.sunk, 30));
+                circles[j].setImageTintList(ColorStateList.valueOf(sel ? T.onKey : T.ink2));
+                circles[j].setSelected(sel);
+                labels[j].setTextColor(sel ? T.ink : T.ink2);
+                labels[j].setTypeface(sel ? Tok.MEDIUM : Tok.REGULAR);
+            }
+        }
+    }
+
     interface OnBool { void on(boolean checked); }
     interface OnInt { void on(int index); }
     interface IntLabel { String f(int v); }
@@ -1189,14 +1470,15 @@ public class MainActivity extends Activity {
         }
         applying = true;
         switch (base) {
-            case 0x0603: if (b0 >= 0) { setValue(vBattery, b0 + " %"); batteryDots.set(b0 + "%", true, "Battery " + b0 + " percent"); batteryLabel.setText("BATTERY"); } break;
-            case 0x1206: setValue(vModel, ascii(f.payload)); tileDevice.setText(ascii(f.payload)); break;
+            case 0x0603: if (b0 >= 0) { setValue(vBattery, b0 + " %"); batteryDots.set(b0 + "%", true, "Battery " + b0 + " percent"); } break;
+            case 0x1206: setValue(vModel, ascii(f.payload)); modelText = ascii(f.payload); updateDeviceTile(); break;
             case 0x1201: if (f.payload.length >= 6)                          // firmware = 3 x u16 BE
                 { String fw = Gaia.u16(f.payload, 0) + "." + Gaia.u16(f.payload, 2) + "." + Gaia.u16(f.payload, 4);
-                  setValue(vFirmware, fw); tileDeviceSub.setText("fw " + fw); heroFw.setText("fw " + fw); }
+                  setValue(vFirmware, fw); fwText = fw; renderStatus(); }
                 break;
-            case 0x1200: if (f.payload.length >= 2) setValue(vHardware, String.valueOf(Gaia.u16(f.payload, 0)));
-                else if (b0 >= 0) setValue(vHardware, String.valueOf(b0));
+            case 0x1200: if (f.payload.length >= 2) hwText = String.valueOf(Gaia.u16(f.payload, 0));
+                else if (b0 >= 0) hwText = String.valueOf(b0);
+                if (hwText != null) { setValue(vHardware, hwText); updateDeviceTile(); }
                 break;
             case 0x1A05: if (b0 >= 0) { ancOn = b0 == 1; refreshNoise(); } break;
             case 0x1A01:                                                     // [mode,state] pairs: 1 anti-wind, 3 adaptive
@@ -1365,7 +1647,7 @@ public class MainActivity extends Activity {
         else setStatus(0, "Not connected");                      // callers set a more specific text after
         connectBtn.setEnabled(true);
         connectBtn.setText(on ? "Disconnect" : "Connect");
-        if (on) styleOutline(connectBtn); else styleFilled(connectBtn);
+        if (on) styleSunk(connectBtn); else styleFilled(connectBtn);
         setGroupEnabled(on);
     }
 
@@ -1439,6 +1721,7 @@ public class MainActivity extends Activity {
     }
 
     private void toggleGuard() {
+        guardPendingUntil = System.currentTimeMillis() + 2400;
         if (AutoOffService.running) { AutoOffService.stop(this); append("Idle guard stopped."); }
         else startGuard();
         refreshGuardButton();
@@ -1477,7 +1760,7 @@ public class MainActivity extends Activity {
         applyGuardState();
         if (guardButton != null) {
             guardButton.postDelayed(this::applyGuardState, 600);
-            guardButton.postDelayed(this::applyGuardState, 2000);
+            guardButton.postDelayed(this::applyGuardState, 2600);
         }
     }
 
@@ -1486,12 +1769,17 @@ public class MainActivity extends Activity {
         boolean on = AutoOffService.running;
         int min = prefs.getInt("minutes", 15);
         guardButton.setText(on ? "Stop guard" : "Start guard");
-        if (on) styleOutline(guardButton); else styleFilled(guardButton);
+        if (on) styleSunk(guardButton); else styleFilled(guardButton);
+        if (guardSwitch != null && guardSwitch.isChecked() != on && System.currentTimeMillis() >= guardPendingUntil) {
+            guardApplying = true;
+            guardSwitch.setChecked(on);
+            guardApplying = false;
+        }
         long fired = AutoOffService.firedAt;
         boolean justFired = !on && fired > 0;
         guardDots.set(on ? String.valueOf(min) : justFired ? "SENT" : "OFF", on,
                 on ? "Guard on, " + min + " minutes idle" : justFired ? "Power-off sent" : "Guard off");
-        guardUnit.setText(on ? "MIN IDLE" : justFired ? "POWER-OFF" : "GUARD");
+        guardUnit.setText(on ? "minutes idle, then fully off" : justFired ? "power-off sent" : "the guard is off");
         refreshGuardSummary();
         if (on && AutoOffService.lastSendFailed) {
             guardStatus.setText("Couldn't reach the headphones. They may be off already; the guard tries again later.");
@@ -1503,7 +1791,6 @@ public class MainActivity extends Activity {
                     : "The guard is not running.");
         }
         refreshGuardTarget();
-        guardDot.setText(on ? "●" : "");
     }
 
     private void copyLog() {

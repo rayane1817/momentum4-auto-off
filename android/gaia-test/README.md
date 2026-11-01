@@ -2,6 +2,14 @@
 
 Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control channel (RFCOMM, UUID `a2129ff3-081b-4c45-8afe-469d9c4842ec`) and sends single commands. No internet permission, no libraries, Bluetooth only.
 
+## v0.14.0: design v4 (docs/design-spec-v4.md)
+- Home in the Nothing X style: battery in dot numbers, the headphones' name, a noise card with three round buttons, two-column tiles (Equaliser, Listening, Auto power-off with an on/off switch, Device), and a "Power off now" row. The cog opens Device.
+- Equaliser: five vertical faders in the Poweramp style. Drag one, or sweep across several to draw a curve; double-tap a fader to reset it to 0. A dot-matrix curve sits under them. Presets open from the name pill as a list with small curve pictures.
+- Auto power-off has its own page: big dot minutes, status, idle time, autostart, and a Start/Stop button.
+- Listening and Device use grouped rows with small line icons and large serif page titles.
+- Widgets: round noise buttons with labels; the EQ widget shows a small curve under the preset name.
+- Same commands as v0.13.0. The faders send the same EQ frame; a sweep sends one per band you changed.
+
 ## v0.13.0: guard back-off + Copy report
 - If a power-off attempt fails (usually because the headphones are already off in the case or by the button), the guard waits 1, then 5, then 30 minutes between tries instead of trying every 15 seconds forever. Audio or a call resets it. The notification says when the next try is.
 - Device > **Copy report** copies a short text for bug reports and community testing: app version, phone model, Android version, headphone model/firmware/battery, guard settings and the last log lines. Bluetooth addresses are replaced with XX, and only MOMENTUM device names are included. "Copy" on the log also hides addresses now.
