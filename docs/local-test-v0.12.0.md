@@ -1,11 +1,12 @@
 # Local check: v0.12.0 + v0.12.1 + v0.13.0 (one run) (design v3 "Copper on black")
 
-Restyle only: the send(...) and toggle(...) calls in MainActivity are identical to v0.11.2 (sorted diff). So this is a UI check, not a protocol run. No `0605` except the guard step.
+v0.12.0 is a restyle: the send(...) and toggle(...) calls in MainActivity are identical to v0.11.2 (sorted diff), so steps 1-10 are a UI check, not a protocol run. v0.12.1 and v0.13.0 change the guard (connect deadline, back-off) and add Copy report: steps 11-14. No `0605` except the guard steps (8 and 11).
 
 Record per test: fw, app + version, cups, case, result.
 
 ## Setup
-- `adb install -r android/gaia-test/release/m4-gaia-test-0.12.0.apk` over v0.11.2 (same key, no uninstall). versionCode 19.
+- `adb install -r android/gaia-test/release/m4-gaia-test-0.13.0.apk` over whatever 0.9.1+ build is installed (same key, no uninstall). Check versionCode 21 with `adb shell dumpsys package be.ryane.gaiatest | findstr versionCode`.
+- The release APK on GitHub must have the same SHA-256 as the repo copy (`release/SHA256SUMS`).
 - SCP force-stopped.
 
 ## Selector changes (spec section 8)
@@ -16,7 +17,7 @@ Record per test: fw, app + version, cups, case, result.
 | Sound / Listening / Device sections on one scroll | Tiles "SOUND", "LISTENING", "DEVICE" on Home open pages; back arrow (contentDescription "Back") or system Back returns |
 | "Power off now" button | Home tile "POWER OFF" (same confirm dialog) |
 | Idle minutes field + autostart switch | Guard summary line "Idle time 15 min · Starts with the app" (tap to expand) |
-| Guard log button in the guard panel | Device page |
+| Guard log button in the guard panel | Device page, plus new outline button "Copy report" below it (v0.13.0) |
 | Sound: chips row + 5 sliders | Segmented "Presets" / "Bands"; presets as a 2-column grid |
 | Widget title device name + "as last set" | "NOISE · AS LAST SET" / "NOISE · TAP A MODE"; EQ "PRESET 02 / 10" |
 
