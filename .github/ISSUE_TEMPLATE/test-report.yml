@@ -1,0 +1,58 @@
+name: Test report
+description: How the app and the remote power-off work on your headphones and phone.
+title: "Report: <phone> / fw <firmware>"
+labels: ["community-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing. In the app: connect, then **Device > Copy report**, and paste it below.
+        The report has no Bluetooth addresses or other device names. Not affiliated with Sennheiser.
+  - type: textarea
+    id: report
+    attributes:
+      label: App report
+      description: Paste the text from Device > Copy report.
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: model
+    attributes:
+      label: Headphones
+      options: [MOMENTUM 4, Momentum True Wireless 4, Accentum / Accentum Plus, Other Sennheiser]
+    validations:
+      required: true
+  - type: dropdown
+    id: poweroff
+    attributes:
+      label: Did "Power off" switch them fully off?
+      description: Fully off = they don't reconnect until you press the button.
+      options: ["Yes", "No, they stayed on", "No, they went off but came back on their own", "Didn't try"]
+    validations:
+      required: true
+  - type: dropdown
+    id: guard
+    attributes:
+      label: With the guard on, did they switch off after the idle time?
+      options: ["Yes", "No, never fired", "Fired, but couldn't reach them", "Didn't try"]
+    validations:
+      required: true
+  - type: dropdown
+    id: falseoff
+    attributes:
+      label: Did they ever switch off while you were wearing them?
+      options: ["No", "Yes, while silent", "Yes, while playing audio", "Didn't wear them with the guard on"]
+  - type: input
+    id: battery
+    attributes:
+      label: Battery or power-saving apps or settings on the phone
+      placeholder: e.g. Samsung Device Care, Xiaomi battery saver, none
+  - type: input
+    id: wish
+    attributes:
+      label: One feature you'd want next
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else

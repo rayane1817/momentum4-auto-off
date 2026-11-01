@@ -552,6 +552,13 @@ public class MainActivity extends Activity {
         vHardware = valueRow(vals, "Hardware");
         c.addView(cardWrap(vals));
         c.addView(textBtn("Guard log", v -> append(AutoOffService.getLog())));
+        Button report = outlineBtn("Copy report", v -> copyReport());
+        LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(-1, dp(48));
+        rp.topMargin = dp(8);
+        c.addView(report, rp);
+        TextView rc = caption("For bug reports and community testing. No Bluetooth addresses, no other device names.");
+        rc.setPadding(0, dp(6), 0, dp(8));
+        c.addView(rc);
         c.addView(advancedCard());
         c.addView(logCard());
         return c;
@@ -1487,7 +1494,7 @@ public class MainActivity extends Activity {
         guardUnit.setText(on ? "MIN IDLE" : justFired ? "POWER-OFF" : "GUARD");
         refreshGuardSummary();
         if (on && AutoOffService.lastSendFailed) {
-            guardStatus.setText("Couldn't reach the headphones to power them off. Trying again next cycle.");
+            guardStatus.setText("Couldn't reach the headphones. They may be off already; the guard tries again later.");
             guardStatus.setTextColor(T.danger);
         } else {
             guardStatus.setTextColor(T.ink2);
@@ -1500,8 +1507,31 @@ public class MainActivity extends Activity {
     }
 
     private void copyLog() {
-        ((ClipboardManager) getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("log", log.getText()));
+        ((ClipboardManager) getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("log", Report.redact(log.getText().toString())));
         toast("Log copied");
+    }
+
+    /** Device > Copy report: one paste-able block for Reddit or the GitHub report form. */
+    @SuppressWarnings("MissingPermission")
+    private void copyReport() {
+        String ver = "?";
+        try { ver = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception ignored) {}
+        BluetoothDevice d = selectedDevice();
+        StringBuilder r = new StringBuilder("M4 app report\n");
+        r.append("App: ").append(ver).append('\n');
+        r.append("Phone: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
+                .append(", Android ").append(Build.VERSION.RELEASE).append(" (SDK ").append(Build.VERSION.SDK_INT).append(")\n");
+        r.append("Headphones: ").append(Report.safeName(d == null ? null : nameOf(d)))
+                .append(", connected now: ").append(out != null ? "yes" : "no").append('\n');
+        r.append("Model: ").append(vModel.getText()).append(", firmware: ").append(vFirmware.getText())
+                .append(", hardware: ").append(vHardware.getText()).append(", battery: ").append(vBattery.getText()).append('\n');
+        r.append("Guard: ").append(AutoOffService.running ? "running" : "stopped")
+                .append(", idle time ").append(prefs.getInt("minutes", 15)).append(" min, autostart ")
+                .append(prefs.getBoolean("autostart", false) ? "on" : "off").append('\n');
+        r.append("\n-- guard log (last 40) --\n").append(Report.tail(AutoOffService.getLog(), 40));
+        r.append("\n\n-- app log (last 40) --\n").append(Report.tail(log.getText().toString(), 40)).append('\n');
+        ((ClipboardManager) getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("M4 report", r.toString()));
+        toast("Report copied. Paste it in your comment or the report form.");
     }
 
     private void append(String line) {

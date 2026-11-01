@@ -86,21 +86,24 @@ public class AutoOffService extends Service {
         try {
             AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
             long lastInUse = now();
+            int failures = 0;          // failed power-offs in a row since the last use
+            long nextTry = 0;          // back-off: no new attempt before this time
             while (!stop) {
                 boolean music = am != null && am.isMusicActive();
                 int mode = am == null ? AudioManager.MODE_NORMAL : am.getMode();
                 boolean inCall = mode != AudioManager.MODE_NORMAL;
                 boolean inUse = music || inCall;
-                if (inUse) lastInUse = now();
+                if (inUse) { lastInUse = now(); failures = 0; nextTry = 0; lastSendFailed = false; }
                 long idleMs = now() - lastInUse;
 
                 String s = String.format(Locale.ROOT, "music=%s call=%s idle=%dm%02ds",
                         music, inCall, idleMs / 60000, (idleMs / 1000) % 60);
                 appendLog(s);                       // full detail in the guard log every poll, as before
                 long left = Math.max(0, timeout - idleMs);
-                notifyText(inUse ? "In use: audio or a call" : "Idle. Switches off in " + ((left + 59_999) / 60_000) + " min");
+                if (inUse || failures == 0)
+                    notifyText(inUse ? "In use: audio or a call" : "Idle. Switches off in " + ((left + 59_999) / 60_000) + " min");
 
-                if (idleMs >= timeout) {
+                if (idleMs >= timeout && now() >= nextTry) {
                     log("idle timeout reached, sending power-off");
                     if (sendPowerOff(addr)) {
                         firedAt = System.currentTimeMillis();
@@ -109,10 +112,13 @@ public class AutoOffService extends Service {
                         log("power-off sent OK (0605)");
                     } else {
                         lastSendFailed = true;
-                        status("Could not reach the headset to power off. Will retry next cycle.");
-                        log("power-off send FAILED; staying armed");
-                        // Do not reset the clock; try again next poll so a brief
-                        // connection failure does not disarm the guard.
+                        failures++;
+                        long wait = GuardRetry.delayMs(failures);
+                        nextTry = now() + wait;
+                        // Usually they are already off (case or button). Stay armed but back off,
+                        // so Bluetooth isn't paged every poll; audio or a call resets this.
+                        status("Couldn't reach the headphones (off already?). Next try in " + GuardRetry.describe(wait) + ".");
+                        log("power-off send FAILED (" + failures + " in a row); next try in " + GuardRetry.describe(wait));
                         sleepUntilNextPoll();
                         continue;
                     }

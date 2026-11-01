@@ -2,6 +2,12 @@
 
 Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control channel (RFCOMM, UUID `a2129ff3-081b-4c45-8afe-469d9c4842ec`) and sends single commands. No internet permission, no libraries, Bluetooth only.
 
+## v0.13.0: guard back-off + Copy report
+- If a power-off attempt fails (usually because the headphones are already off in the case or by the button), the guard waits 1, then 5, then 30 minutes between tries instead of trying every 15 seconds forever. Audio or a call resets it. The notification says when the next try is.
+- Device > **Copy report** copies a short text for bug reports and community testing: app version, phone model, Android version, headphone model/firmware/battery, guard settings and the last log lines. Bluetooth addresses are replaced with XX, and only MOMENTUM device names are included. "Copy" on the log also hides addresses now.
+- GitHub has a "Test report" form for these reports.
+- No change to the screens otherwise, or to the commands the app sends.
+
 ## v0.12.1: audit fixes
 - The auto power-off guard now gives each connect attempt 8 s at most (the socket is closed if the headphones don't answer), so a failed power-off ends in about 33 s instead of hanging. Log line on timeout: "connect timeout after 8000 ms".
 - Releases run the unit tests first, and a pushed tag must match the app version.
@@ -35,7 +41,7 @@ Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control cha
 - Widget and tile failures say "Can't reach <device>. Are they on?", short enough for one toast.
 - EQ faders fill from 0 dB in the middle (left = cut, right = boost); ticks on the transparency and call faders.
 - After the guard fires: "Sent" and the time, or a red line if it couldn't reach the headphones.
-- Same commands as v0.10.1. Check list: `docs/local-test-v0.11.0.md`.
+- Same commands as v0.10.1. Check list: `docs/archive/local-test-v0.11.0.md`.
 
 ## v0.10.5: new look (design v2, "Copper and graphite")
 - Warm graphite and paper colours with one copper accent that only means "live on the headphones now" (status dot, selected mode, active preset, armed guard). Spec: `docs/design-spec-v2.md`, research: `docs/design-research.md`.
@@ -61,7 +67,7 @@ Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control cha
 - **Widget tap with the headphones off no longer freezes and kills the app.** A widget now tries once, gives up after 4.5 s and shows "Headphones busy or off". Quick Settings tiles retry once and stay greyed at most about 10 s.
 - **Opening the app no longer resets the EQ widget and tile to "Neutral".** They only follow the app once it has read the curve from the headphones.
 - **Header visible again on Android 15+**: no more title bar, and the status pill, device picker and Rescan sit below the status bar.
-- Installs over v0.10 (same key). Not yet tested on the headset: see `docs/local-test-v0.10.1.md`.
+- Installs over v0.10 (same key). Not yet tested on the headset: see `docs/archive/local-test-v0.10.1.md`.
 
 ## v0.10: widgets, Quick Settings tiles, custom presets
 - **Home-screen widgets** (long-press the home screen > Widgets > M4 GAIA test):
@@ -71,7 +77,7 @@ Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control cha
 - How they work: each tap connects, sends the same frames as the app, and disconnects (about 1 to 3 s). If the app is open and connected, they send through it instead. Nothing stays connected, so the guard and Smart Control keep working. If Smart Control holds the headphones, you get a "busy" message.
 - What they show is the last state this app set or read, because a widget can't read the headphones without connecting.
 - **5 custom EQ presets**: set the sliders, tap "Save current curve as a custom preset", pick a slot and a name. Custom presets show as ★ chips after the 8 built-ins and are part of the EQ widget/tile cycle. Long-press one to rename, overwrite or delete. They are stored on the phone (the headphones only keep the current curve).
-- Not yet tested on the headset: see `docs/local-test-v0.10.md`.
+- Not yet tested on the headset: see `docs/archive/local-test-v0.10.md`.
 
 ## v0.9.1 (fixes from the hardware session, PR #12)
 - **Anti-wind labels fixed**: on the wire 1 = Max, 2 = Auto (T17). v0.8 and v0.9 had Auto and Max swapped.
