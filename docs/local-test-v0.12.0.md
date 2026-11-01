@@ -1,4 +1,4 @@
-# Local check: v0.12.0 (design v3 "Copper on black")
+# Local check: v0.12.0 + v0.12.1 + v0.13.0 (one run) (design v3 "Copper on black")
 
 Restyle only: the send(...) and toggle(...) calls in MainActivity are identical to v0.11.2 (sorted diff). So this is a UI check, not a protocol run. No `0605` except the guard step.
 
@@ -33,3 +33,9 @@ Other labels unchanged ("Connect", "Disconnect", "Start guard", "Stop guard", "F
 8. Guard: Start / Stop; dots show minutes / OFF / SENT; summary line follows the autostart switch. One 2-min guard run to `0605`.
 9. Back from a sub-page returns to Home; Back on Home leaves the app. Rotation and fold keep the current page and the link; a dark-mode switch recreates the activity and lands on Home.
 10. Widgets after `am kill`: noise and EQ frames as in v0.10.1.
+
+## Also for v0.12.1 and v0.13.0 (install v0.13.0 directly; it contains both)
+11. Guard with the headphones already off: guard 2 min, switch the M4 off with the button, phone idle. Expect: first try fails (each connect gives up after ~8 s, "connect timeout after 8000 ms"), then "next try in 1 min", then 5 min, then 30 min (M4GUARD). Notification shows the next try. Play audio for a moment: failures reset. Switch the M4 on, stay idle: next timeout sends 0605.
+12. Device > Copy report: paste in a note. Check: app 0.13.0, phone model, Android version, model/firmware/battery, guard line, both log tails. Any Bluetooth address shows as XX:XX:XX:XX:XX:XX; no TV or other device name.
+13. Log card Copy: addresses replaced with XX.
+14. GitHub: "New issue" shows the "Test report" form.
