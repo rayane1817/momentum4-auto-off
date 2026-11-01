@@ -1,36 +1,45 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Noise widget, design v3 (docs/design-spec-v3.md). Colours only from @color, so the launcher repaints it in dark mode itself. -->
+<!-- Noise widget, design v4 section 9: surface card, three round buttons with labels.
+     Colours only from @color; the selected state swaps views, so the launcher repaints it in dark mode. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
     android:orientation="vertical" android:padding="8dp" android:background="@drawable/w_bg">
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingBottom="4dp" android:paddingStart="4dp" android:paddingEnd="4dp">
-        <TextView android:id="@+id/w_title" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
-            android:text="NOISE · TAP A MODE" android:textColor="@color/ink2" android:textSize="11sp" android:fontFamily="monospace" android:letterSpacing="0.12" android:maxLines="1" android:ellipsize="end" />
-        <TextView android:id="@+id/w_note" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="" android:textColor="@color/ink2" android:textSize="11sp" android:visibility="gone" />
-    </LinearLayout>
-    <!-- the key row takes all the height the launcher gives (at least 36 dp): bigger widget = bigger keys, no empty band -->
-    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:minHeight="36dp" android:orientation="horizontal" android:padding="3dp" android:background="@drawable/w_track">
-        <FrameLayout android:id="@+id/w_adaptive" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:clickable="true" android:focusable="true" android:contentDescription="Adaptive">
-            <LinearLayout android:id="@+id/w_adaptive_on" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center" android:orientation="horizontal" android:visibility="gone">
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="11sp" android:textColor="@color/pilot_on_key" android:paddingEnd="6dp" />
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Adaptive" android:textSize="15sp" android:fontFamily="sans-serif-medium" android:textColor="@color/on_key" />
-            </LinearLayout>
-            <TextView android:id="@+id/w_adaptive_off" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center" android:text="Adaptive" android:textSize="15sp" android:fontFamily="sans-serif-medium" android:textColor="@color/ink" />
-        </FrameLayout>
-        <FrameLayout android:id="@+id/w_custom" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:clickable="true" android:focusable="true" android:contentDescription="Custom">
-            <LinearLayout android:id="@+id/w_custom_on" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center" android:orientation="horizontal" android:visibility="gone">
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="11sp" android:textColor="@color/pilot_on_key" android:paddingEnd="6dp" />
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Custom" android:textSize="15sp" android:fontFamily="sans-serif-medium" android:textColor="@color/on_key" />
-            </LinearLayout>
-            <TextView android:id="@+id/w_custom_off" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center" android:text="Custom" android:textSize="15sp" android:fontFamily="sans-serif-medium" android:textColor="@color/ink" />
-        </FrameLayout>
-        <FrameLayout android:id="@+id/w_off" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:clickable="true" android:focusable="true" android:contentDescription="Off">
-            <LinearLayout android:id="@+id/w_off_on" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center" android:orientation="horizontal" android:visibility="gone">
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="11sp" android:textColor="@color/pilot_on_key" android:paddingEnd="6dp" />
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Off" android:textSize="15sp" android:fontFamily="sans-serif-medium" android:textColor="@color/on_key" />
-            </LinearLayout>
-            <TextView android:id="@+id/w_off_off" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center" android:text="Off" android:textSize="15sp" android:fontFamily="sans-serif-medium" android:textColor="@color/ink" />
-        </FrameLayout>
+    <TextView android:id="@+id/w_title" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingStart="6dp" android:paddingBottom="2dp"
+        android:text="Noise control" android:textColor="@color/ink2" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" />
+    <TextView android:id="@+id/w_note" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
+        <LinearLayout android:id="@+id/w_adaptive" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent"
+            android:orientation="vertical" android:gravity="center" android:clickable="true" android:focusable="true" android:contentDescription="Adaptive">
+            <FrameLayout android:layout_width="40dp" android:layout_height="40dp">
+                <ImageView android:id="@+id/w_adaptive_on" android:layout_width="match_parent" android:layout_height="match_parent" android:padding="9dp"
+                    android:background="@drawable/w_circle_on" android:src="@drawable/ic_adaptive" android:tint="@color/on_key" android:visibility="gone" android:importantForAccessibility="no" />
+                <ImageView android:id="@+id/w_adaptive_off" android:layout_width="match_parent" android:layout_height="match_parent" android:padding="9dp"
+                    android:background="@drawable/w_circle_off" android:src="@drawable/ic_adaptive" android:tint="@color/ink2" android:importantForAccessibility="no" />
+            </FrameLayout>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="3dp"
+                android:text="Adaptive" android:textSize="12sp" android:textColor="@color/ink" android:maxLines="1" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/w_custom" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent"
+            android:orientation="vertical" android:gravity="center" android:clickable="true" android:focusable="true" android:contentDescription="Custom">
+            <FrameLayout android:layout_width="40dp" android:layout_height="40dp">
+                <ImageView android:id="@+id/w_custom_on" android:layout_width="match_parent" android:layout_height="match_parent" android:padding="9dp"
+                    android:background="@drawable/w_circle_on" android:src="@drawable/ic_custom" android:tint="@color/on_key" android:visibility="gone" android:importantForAccessibility="no" />
+                <ImageView android:id="@+id/w_custom_off" android:layout_width="match_parent" android:layout_height="match_parent" android:padding="9dp"
+                    android:background="@drawable/w_circle_off" android:src="@drawable/ic_custom" android:tint="@color/ink2" android:importantForAccessibility="no" />
+            </FrameLayout>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="3dp"
+                android:text="Custom" android:textSize="12sp" android:textColor="@color/ink" android:maxLines="1" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/w_off" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent"
+            android:orientation="vertical" android:gravity="center" android:clickable="true" android:focusable="true" android:contentDescription="Off">
+            <FrameLayout android:layout_width="40dp" android:layout_height="40dp">
+                <ImageView android:id="@+id/w_off_on" android:layout_width="match_parent" android:layout_height="match_parent" android:padding="9dp"
+                    android:background="@drawable/w_circle_on" android:src="@drawable/ic_off" android:tint="@color/on_key" android:visibility="gone" android:importantForAccessibility="no" />
+                <ImageView android:id="@+id/w_off_off" android:layout_width="match_parent" android:layout_height="match_parent" android:padding="9dp"
+                    android:background="@drawable/w_circle_off" android:src="@drawable/ic_off" android:tint="@color/ink2" android:importantForAccessibility="no" />
+            </FrameLayout>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingTop="3dp"
+                android:text="Off" android:textSize="12sp" android:textColor="@color/ink" android:maxLines="1" />
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>

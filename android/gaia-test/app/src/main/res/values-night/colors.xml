@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Design v3 "Copper on black" (docs/design-spec-v3.md). Dark: true black (OLED). -->
+<!-- Design v4 (docs/design-spec-v4.md section 3). Dark. glow = copper at 75 %. -->
 <resources>
     <color name="bg">#000000</color>
-    <color name="surface">#121212</color>
-    <color name="sunk">#1E1E1E</color>
-    <color name="ink">#F5F5F5</color>
-    <color name="ink2">#9A9A9A</color>
-    <color name="rule">#262626</color>
-    <color name="rule_strong">#6B6B6B</color>
+    <color name="surface">#1C1C1C</color>
+    <color name="sunk">#2C2C2C</color>
+    <color name="ink">#F2F2F2</color>
+    <color name="ink2">#9E9E9E</color>
+    <color name="rule">#2A2A2A</color>
+    <color name="rule_strong">#3A3A3A</color>
     <color name="on_key">#000000</color>
     <color name="copper">#D98C55</color>
     <color name="on_copper">#000000</color>
@@ -15,5 +15,9 @@
     <color name="pilot_on_key">#9A4E1C</color>
     <color name="danger">#FF7A6E</color>
     <color name="on_danger">#000000</color>
+    <color name="fader_cap">#262626</color>
+    <color name="fader_edge">#555555</color>
+    <color name="glow">#BFD98C55</color>
+    <color name="matrix_lit">#6E6E6E</color>
     <color name="transparent">#00000000</color>
 </resources>

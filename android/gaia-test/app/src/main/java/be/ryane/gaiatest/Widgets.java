@@ -102,7 +102,7 @@ final class Widgets {
     }
 
     /**
-     * Design v2 (spec 4): every colour comes from @color resources inside the layouts, and the
+     * Design v2/v4: every colour comes from @color resources inside the layouts, and the
      * selected state is shown by toggling views, never by setTextColor(int), so the launcher can
      * repaint the widget for light or dark mode without the app.
      */
@@ -114,13 +114,12 @@ final class Widgets {
         int[] off = {R.id.w_adaptive_off, R.id.w_custom_off, R.id.w_off_off};
         for (int i = 0; i < 3; i++) {
             boolean sel = i == mode;
-            v.setInt(ids[i], "setBackgroundResource", sel ? R.drawable.w_key_on : 0);
             v.setViewVisibility(on[i], sel ? View.VISIBLE : View.GONE);
             v.setViewVisibility(off[i], sel ? View.GONE : View.VISIBLE);
             v.setOnClickPendingIntent(ids[i], broadcast(c, NoiseWidget.class, ACT_NOISE, EXTRA_MODE, i, 10 + i));
         }
         boolean known = mode >= 0;
-        v.setTextViewText(R.id.w_title, known ? "NOISE · AS LAST SET" : "NOISE · TAP A MODE");
+        v.setTextViewText(R.id.w_title, known ? "Noise control" : "Noise control · tap a mode");
         v.setViewVisibility(R.id.w_note, View.GONE);
         v.setOnClickPendingIntent(R.id.w_title, openApp(c));
         return v;
@@ -133,8 +132,8 @@ final class Widgets {
         boolean known = i >= 0 && i < all.size();
         v.setTextViewText(R.id.w_eq_name, eqName(c));
         v.setViewVisibility(R.id.w_eq_dot, known ? View.VISIBLE : View.GONE);
-        v.setTextViewText(R.id.w_eq_pos, known ? String.format(java.util.Locale.ROOT, "PRESET %02d / %02d", i + 1, all.size()) : "");
-        v.setViewVisibility(R.id.w_eq_pos, known ? View.VISIBLE : View.GONE);
+        if (known) v.setImageViewBitmap(R.id.w_eq_thumb, EqCurve.thumbnail(c, new Tok(c), all.get(i).gains, 64, 18));
+        v.setViewVisibility(R.id.w_eq_thumb, known ? View.VISIBLE : View.INVISIBLE);
         v.setOnClickPendingIntent(R.id.w_eq_prev, broadcast(c, EqWidget.class, ACT_EQ_STEP, EXTRA_STEP, -1, 20));
         v.setOnClickPendingIntent(R.id.w_eq_next, broadcast(c, EqWidget.class, ACT_EQ_STEP, EXTRA_STEP, 1, 21));
         v.setOnClickPendingIntent(R.id.w_eq_center, openApp(c));

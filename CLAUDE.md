@@ -21,12 +21,12 @@ Full history and test log T1-T42: `docs/history.md`. Read it only when a task ne
 - No Sennheiser or Nothing marks or fonts in the app.
 
 ## Current state (1 Nov 2026)
-- Released: v0.13.0 (1 Nov 2026) = design v3 "Copper on black" (0.12.0) + guard connect deadline (0.12.1) + guard back-off `GuardRetry`, Device > Copy report `Report`, GitHub "Test report" form (0.13.0). None of 0.12.x/0.13.0 run on a phone yet: `docs/local-test-v0.12.0.md` covers all three in one laptop run.
+- Released: v0.14.0 (1 Nov 2026) = design v4 (`docs/design-spec-v4.md`: Nothing X home, Poweramp `EqFaders` + `EqGesture`, dot-matrix `EqCurve`, preset sheet, grouped rows + line icons `res/drawable/ic_*`, guard page + tile switch) on top of 0.13.0 (guard back-off, Copy report, issue form). Ryane chose to skip the laptop run: 0.12-0.14 have never run on a phone; the Reddit testers are the first.
 - Next: Ryane posts `docs/reddit-post-v2.md`; about 7 days later ONE session turns all replies into `docs/community-reports.md`, ranks fixes, builds one release.
 - Open questions (only from community data or a planned capture): 0605 on other firmware and models; guard on aggressive battery-saver phones; meaning of `1405`, `1800`, `1407` (read-only, never probe).
 
 ## Map
-- App: `android/gaia-test/` (pure Java, no libs, minSdk 26, targetSdk 35). `MainActivity` (UI + link), `AutoOffService` (guard), `Gaia` (framing, decode, blocklist), `Remote` + `Widgets` + `*Tile` (one-shot sends), `Presets`, `EqSync`, `Watchdog`, `Tok` + `res/values(-night)/colors.xml` (all colours). JVM tests in `app/src/test`.
+- App: `android/gaia-test/` (pure Java, no libs, minSdk 26, targetSdk 35). `MainActivity` (UI + link; pages Home/Equaliser/Listening/Device/Auto power-off), `EqFaders` (vertical faders), `AutoOffService` (guard), `Gaia` (framing, decode, blocklist), `Remote` + `Widgets` + `*Tile` (one-shot sends), `Presets`, `EqSync`, `Watchdog`, `Tok` + `res/values(-night)/colors.xml` (all colours). JVM tests in `app/src/test`.
 - PC client: `windows-client/gaia_client.py` (snapshot / diff / check; `--addr` or `M4_ADDR`). Tools in `tools/`.
 - Specs: `docs/command-map.md` (every command), `docs/protocol.md`, `docs/config-spec.md`, `docs/design-spec-v3.md`, `docs/design-spec-v4.md` (next design: Nothing X layout + Poweramp faders, approved 1 Nov 2026, not built).
 - Releases: bump `versionCode`/`versionName` in `app/build.gradle`, copy the APK to `android/gaia-test/release/` + `SHA256SUMS`, merge, then run `release.yml` on main (tests first; tag must equal v<versionName>). Signing key is public on purpose (`keystore/`).

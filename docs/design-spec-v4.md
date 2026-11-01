@@ -1,6 +1,6 @@
 # Design spec v4: Nothing X layout + Poweramp faders
 
-Status: **approved by Ryane as the next design (1 Nov 2026). Not built.** Design only; building is for a developer session (section 10).
+Status: **approved by Ryane (1 Nov 2026), built as v0.14.0.** Not yet run on a phone. Deviations from this spec: per-band TalkBack control is a single description of all five bands (no virtual views); the call-transparency fader sits inline in its row instead of opening a page; the device picker row is a Spinner; Advanced keeps the existing collapsible Firmware timer / Raw frame / Log sections under a "Tools" group; the EQ widget curve is a bitmap that repaints when the widget refreshes, not on a dark-mode switch.
 Builds on v3 as shipped in v0.12.0 / v0.13.0 (`docs/design-spec-v3.md`: black-first tokens, copper as the only colour, home + sub-pages, `DotNumerals`, `EqCurve`, `FaderTrack`). v4 changes **how things look and feel**, not what they do.
 Mock-up: board "v4" on the canvas https://claude.ai/artifact/PWtctghujwp6ReAKvvwHNz (opens focused on it; tap tiles, drag or sweep the faders, open the preset list).
 

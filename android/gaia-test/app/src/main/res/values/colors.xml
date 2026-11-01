@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Design v3 "Copper on black" (docs/design-spec-v3.md). Light. -->
+<!-- Design v4 (docs/design-spec-v4.md section 3). Light. glow = copper at 25 %. -->
 <resources>
-    <color name="bg">#F4F4F2</color>
+    <color name="bg">#F2F2F2</color>
     <color name="surface">#FFFFFF</color>
-    <color name="sunk">#EBEBE8</color>
+    <color name="sunk">#E6E6E6</color>
     <color name="ink">#0A0A0A</color>
     <color name="ink2">#5E5E5E</color>
-    <color name="rule">#E2E2DE</color>
-    <color name="rule_strong">#8A8A85</color>
+    <color name="rule">#E0E0E0</color>
+    <color name="rule_strong">#CFCFCF</color>
     <color name="on_key">#FFFFFF</color>
     <color name="copper">#9A4E1C</color>
     <color name="on_copper">#FFFFFF</color>
@@ -15,5 +15,9 @@
     <color name="pilot_on_key">#D98C55</color>
     <color name="danger">#B3261E</color>
     <color name="on_danger">#FFFFFF</color>
+    <color name="fader_cap">#FFFFFF</color>
+    <color name="fader_edge">#9A9A9A</color>
+    <color name="glow">#409A4E1C</color>
+    <color name="matrix_lit">#A8A8A8</color>
     <color name="transparent">#00000000</color>
 </resources>
