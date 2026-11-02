@@ -1,6 +1,6 @@
 # Design spec v4: Nothing X layout + Poweramp faders
 
-Status: **approved by Ryane (1 Nov 2026), built as v0.14.0.** Not yet run on a phone. Deviations from this spec: per-band TalkBack control is a single description of all five bands (no virtual views); the call-transparency fader sits inline in its row instead of opening a page; the device picker row is a Spinner; Advanced keeps the existing collapsible Firmware timer / Raw frame / Log sections under a "Tools" group; the EQ widget curve is a bitmap that repaints when the widget refreshes, not on a dark-mode switch.
+Status: **approved by Ryane (1 Nov 2026), built as v0.14.0.** Widgets revised as v4.1 (section 9, not built yet). Not yet run on a phone. Deviations from this spec: per-band TalkBack control is a single description of all five bands (no virtual views); the call-transparency fader sits inline in its row instead of opening a page; the device picker row is a Spinner; Advanced keeps the existing collapsible Firmware timer / Raw frame / Log sections under a "Tools" group; the EQ widget curve is a bitmap that repaints when the widget refreshes, not on a dark-mode switch.
 Builds on v3 as shipped in v0.12.0 / v0.13.0 (`docs/design-spec-v3.md`: black-first tokens, copper as the only colour, home + sub-pages, `DotNumerals`, `EqCurve`, `FaderTrack`). v4 changes **how things look and feel**, not what they do.
 Mock-up: board "v4" on the canvas https://claude.ai/artifact/PWtctghujwp6ReAKvvwHNz (opens focused on it; tap tiles, drag or sweep the faders, open the preset list).
 
@@ -123,9 +123,39 @@ Body: section label, then **grouped rows**: each row is its own `surface` rect, 
 
 Drawn as `VectorDrawable` path data, tinted `ink2` (copper when live). Paths as used in the mock-up board `V4App`: EQ (three sliders), ear, headphones, power, moon (guard), bass (waveform step), speech (bubble), pause, bolt (latency, battery), Hi-Res (box with "H"), call, hand (touch), head (on-head), info, clock (timer), code (raw, firmware), list (logs), refresh, play (autostart), noise modes: Adaptive (sparkle), Custom (two sliders), Off (circle with slash). None copy Nothing's or Poweramp's icons; they are generic line glyphs.
 
-## 9. Widgets and tiles
+## 9. Widgets and tiles (revised 1 Nov 2026, v4.1: not built yet)
 
-Widgets follow the home: `surface` card, radius 18. Noise widget: the 3 round buttons with labels (selected `ink` circle). EQ widget: round ‹ › buttons, preset name, small curve thumbnail under it. Quick Settings tiles unchanged (system-drawn).
+v0.14.0 shipped a first pass (round noise buttons, EQ curve thumbnail). v4.1 makes the widgets speak the same language as the home tiles and the Poweramp faders. Board "v4. Widgets" on the canvas.
+
+### 9.1 Shared
+- Card: `surface`, radius 18 (API 31+: system widget radius if larger), 14 dp padding, no shadow, no translucency.
+- Title top-left in sans 14 sp `ink` ("Noise control", "Equaliser"); state line 12 sp `ink2` under it or right-aligned. Sentence case, like the app.
+- Colours only from `@color`; selected states swap views (v2 4.3), so the launcher repaints in dark mode.
+
+### 9.2 Noise control
+- **3 x 1 (default)**: title left, "as last set" right (`ink2`). Three 46 dp round buttons with labels (11 sp): selected `ink` circle, `on_key` icon, `ink` medium label; others `sunk` circle, `ink2` icon and label. Same icons as the app (ic_adaptive, ic_custom, ic_off).
+- **2 x 2**: title, current mode as the state line ("Adaptive"), three 48 dp round buttons along the bottom, no labels (content descriptions carry them).
+
+### 9.3 Equaliser
+- **3 x 1 (default)**: round ‹ and › buttons (40 dp, `sunk`) at the sides. In the middle: **five mini Poweramp faders** (12 x 40 dp each: 1 dp track `rule_strong`, 12 x 16 dp cap with 1 dp `fader_edge`, 2 dp copper fill from the cap down with a small glow), then copper dot + preset name. This replaces the curve thumbnail.
+- **2 x 2**: title, copper dot + preset name, position "2/10" in mono top-right; five larger mini faders (16 x 72 dp, cap 16 x 22 dp with a grip line) in the middle; ‹ › round buttons at the bottom corners.
+- "Custom curve" (no preset matches): no dot, faders still show the curve.
+- The mini faders are **one bitmap** drawn by the app from the current gains (RemoteViews cannot host custom views), the same way the v0.14.0 thumbnail is. It repaints on every widget refresh; a dark-mode switch without a refresh keeps the old colours until the next one (known, accepted in v0.14.0).
+
+### 9.4 States (both widgets)
+| State | Look | Copy |
+|---|---|---|
+| Sending | copper ring (indeterminate `ProgressBar`) around the tapped button; state line changes | "Sending Custom..." |
+| Never read | no button selected, state line in `ink2` | "Tap a mode. Not read yet." |
+| Failed | selection unchanged; state line in `danger` until the next tap; toast as today | "Can't reach MOMENTUM 4. Are they on?" (v0.11.0 text, device name from prefs) |
+
+Sending and Failed need one extra widget update before and after the send (UI only; the frames and the 7 s deadline stay as in v0.10.1).
+
+### 9.5 Sizes
+- Both widgets: default 3 x 1, resizable to 2 x 2 (and down to 2 x 1, which shows the 3 x 1 layout without the title). API 31+: size-mapped `RemoteViews`; API 26-30: `onAppWidgetOptionsChanged` picks the layout from the reported size.
+
+### 9.6 Quick Settings tiles
+Unchanged: system-drawn; we keep the per-mode noise icon and the EQ bars icon.
 
 ## 10. For the developer session
 
