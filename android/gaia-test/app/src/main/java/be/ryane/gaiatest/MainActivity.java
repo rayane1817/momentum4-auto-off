@@ -5,7 +5,10 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothA2dp;
+import android.bluetooth.BluetoothHeadset;
 import android.bluetooth.BluetoothManager;
+import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothSocket;
 import android.content.BroadcastReceiver;
 import android.content.ClipData;
@@ -22,6 +25,9 @@ import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
@@ -43,8 +49,10 @@ import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -102,6 +110,36 @@ public class MainActivity extends Activity {
         }
     };
 
+    // ---- Auto-connect (v0.14.2): open the GAIA link as soon as the headset is on the phone, like
+    // Smart Control does. Foreground only (onStart..onStop): no service, no battery exemption.
+    private final AutoConnect auto = new AutoConnect();
+    private final Handler main = new Handler(Looper.getMainLooper());
+    private final Set<String> aclUp = new HashSet<>();   // addresses with an ACL link seen while started
+    private BluetoothProfile a2dp, headsetProfile;
+    private boolean started;
+    private long linkSince;                              // elapsedRealtime when the current link came up
+    private final Runnable autoRun = this::autoAttempt;
+
+    private final BluetoothProfile.ServiceListener profileListener = new BluetoothProfile.ServiceListener() {
+        @Override
+        public void onServiceConnected(int profile, BluetoothProfile proxy) {
+            if (!started) { closeProxy(profile, proxy); return; }
+            if (profile == BluetoothProfile.A2DP) a2dp = proxy; else headsetProfile = proxy;
+            autoCheck();
+        }
+
+        @Override
+        public void onServiceDisconnected(int profile) {
+            if (profile == BluetoothProfile.A2DP) a2dp = null; else headsetProfile = null;
+        }
+    };
+
+    // The selected headset joining or leaving the phone (ACL, A2DP, headset profile).
+    private final BroadcastReceiver linkReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context ctx, Intent intent) { onHeadsetEvent(intent); }
+    };
+
     // T53: the guard sends 0605 and stops itself while the app is open; redraw the page and tile then.
     private final BroadcastReceiver guardReceiver = new BroadcastReceiver() {
         @Override
@@ -150,6 +188,19 @@ public class MainActivity extends Activity {
         f.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
         f.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
         registerReceiver(btReceiver, f);
+        IntentFilter lf = new IntentFilter();
+        lf.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
+        lf.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
+        lf.addAction(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED);
+        lf.addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED);
+        registerReceiver(linkReceiver, lf);
+        started = true;
+        auto.foreground();
+        BluetoothAdapter adapter = ((BluetoothManager) getSystemService(BLUETOOTH_SERVICE)).getAdapter();
+        if (adapter != null) {
+            adapter.getProfileProxy(this, profileListener, BluetoothProfile.A2DP);
+            adapter.getProfileProxy(this, profileListener, BluetoothProfile.HEADSET);
+        }
         IntentFilter gf = new IntentFilter(AutoOffService.ACTION_STATE);
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(guardReceiver, gf, Context.RECEIVER_NOT_EXPORTED);
         else registerReceiver(guardReceiver, gf);
@@ -159,6 +210,13 @@ public class MainActivity extends Activity {
     protected void onStop() {
         try { unregisterReceiver(btReceiver); } catch (IllegalArgumentException ignored) {}
         try { unregisterReceiver(guardReceiver); } catch (IllegalArgumentException ignored) {}
+        try { unregisterReceiver(linkReceiver); } catch (IllegalArgumentException ignored) {}
+        started = false;
+        main.removeCallbacks(autoRun);
+        aclUp.clear();                                   // we miss ACL changes while stopped
+        closeProxy(BluetoothProfile.A2DP, a2dp);
+        closeProxy(BluetoothProfile.HEADSET, headsetProfile);
+        a2dp = null; headsetProfile = null;
         super.onStop();
     }
 
@@ -634,15 +692,16 @@ public class MainActivity extends Activity {
 
     private void renderStatus() {
         if (statusLine == null) return;
-        String dot = statusKind == 1 ? "●" : statusKind == 2 ? "◌" : "○";
+        String dot = statusKind == 1 ? "●" : statusKind == 2 ? "◌" : "○";   // 3 = waiting: hollow too
         int col = statusKind == 1 ? T.pilot : statusKind == 2 ? Tok.alpha(T.pilot, 0.4f) : T.ruleStrong;
-        String state = statusKind == 1 ? "Connected" : statusKind == 2 ? "Connecting..." : "Not connected";
+        String state = statusKind == 1 ? "Connected" : statusKind == 2 ? "Connecting..."
+                : statusKind == 3 ? statusText : "Not connected";
         if (statusKind == 1 && fwText != null) state += " · fw " + fwText;
         android.text.SpannableString sp = new android.text.SpannableString(dot + "  " + state);
         sp.setSpan(new android.text.style.ForegroundColorSpan(col), 0, 1, 0);
         statusLine.setText(sp);
         heroName.setText(curName);
-        boolean plain = statusText.isEmpty() || statusText.equals("Connected") || statusText.equals("Not connected")
+        boolean plain = statusKind == 3 || statusText.isEmpty() || statusText.equals("Connected") || statusText.equals("Not connected")
                 || statusText.equals("Connecting...");
         statusDetail.setText(plain ? "" : statusText);
         statusDetail.setVisibility(plain ? View.GONE : View.VISIBLE);
@@ -1565,8 +1624,9 @@ public class MainActivity extends Activity {
         if (socket == null && !connecting) {
             if (devices.isEmpty()) setStatus(0, "No paired headphones. Pair them in Android Settings > Bluetooth, then tap Rescan.");
             else if (!sawMomentum) setStatus(0, "No MOMENTUM 4 among the paired devices. Pair it, then tap Rescan.");
-            else setStatus(0, "Not connected");
+            else showIdle();
         }
+        autoCheck();
 
         if (devices.isEmpty()) {
             append("No paired Bluetooth devices. Pair the MOMENTUM 4 in Android Settings > Bluetooth, then tap Rescan.");
@@ -1591,18 +1651,29 @@ public class MainActivity extends Activity {
                     deviceIndex = which;
                     showDeviceName();
                     d.dismiss();
+                    if (socket == null && !connecting) { main.removeCallbacks(autoRun); showIdle(); autoCheck(); }
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
     }
 
+    /** The Connect button. */
+    private void connect() { connect(true); }
+
+    /**
+     * Opens the GAIA link to the selected device. byHand = the Connect button: on success the device
+     * is remembered as OK to auto-connect. Automatic tries log one short line and retry with back-off.
+     */
     @SuppressWarnings("MissingPermission")
-    private void connect() {
+    private void connect(boolean byHand) {
         if (socket != null) { append("Already connected."); return; }
+        if (connecting) return;
         BluetoothDevice device = selectedDevice();
-        if (device == null) { toast("No device"); return; }
+        if (device == null) { if (byHand) toast("No device"); return; }
+        main.removeCallbacks(autoRun);
+        if (byHand) auto.manualConnect();
         prefs.edit().putString("dev", device.getAddress()).putString("devName", nameOf(device)).apply();
-        append("Connecting...");
+        append(byHand ? "Connecting..." : "Auto-connecting to " + nameOf(device) + "...");
         connecting = true;
         userDisconnect = false;
         setStatus(2, "Connecting...");
@@ -1614,16 +1685,26 @@ public class MainActivity extends Activity {
                 socket = s;
                 out = s.getOutputStream();
                 if (destroyed) { closeQuietly(); return; }   // rotated or closed while connecting: don't keep the link
-                runOnUiThread(() -> { setConnected(true); registerNotifications(); readAllConfig(); });
+                runOnUiThread(() -> {
+                    linkSince = SystemClock.elapsedRealtime();
+                    if (byHand) rememberByHand(device);
+                    setConnected(true); registerNotifications(); readAllConfig();
+                });
                 readLoop(s, s.getInputStream());
             } catch (IOException e) {
-                append("Connect failed: " + e.getMessage()
-                        + "\nTry: force stop Smart Control Plus; make sure the MOMENTUM 4 is connected to this device;"
-                        + " if it is paired to two other devices (multipoint), disconnect one. Then Connect again.");
                 closeQuietly();
+                if (byHand) {
+                    append("Connect failed: " + e.getMessage()
+                            + "\nTry: force stop Smart Control Plus; make sure the MOMENTUM 4 is connected to this device;"
+                            + " if it is paired to two other devices (multipoint), disconnect one. Then Connect again.");
+                }
                 runOnUiThread(() -> {
                     setConnected(false);
-                    setStatus(0, "Couldn't reach the headphones. They may be off or held by Smart Control (force-stop it).");
+                    long next = byHand ? -1 : auto.tryFailed(Boolean.TRUE.equals(headsetUp(device)));
+                    if (!byHand) append("Auto-connect failed: " + e.getMessage()
+                            + (next >= 0 ? " (next try in " + next / 1000 + " s)" : ""));
+                    if (next >= 0 && started) { setStatus(2, "Connecting..."); main.postDelayed(autoRun, next); }
+                    else setStatus(0, "Couldn't reach the headphones. They may be off or held by Smart Control (force-stop it).");
                 });
             }
         }).start();
@@ -1648,8 +1729,111 @@ public class MainActivity extends Activity {
         closeQuietly();
         runOnUiThread(() -> {
             setConnected(false);
-            setStatus(0, userDisconnect ? "Not connected" : "Connection lost. Tap Connect.");
+            if (userDisconnect) { setStatus(0, "Not connected"); return; }
+            // Lost without a Disconnect tap (headset switched off, out of range, guard fired):
+            // reconnect if it is still on the phone, else wait for it.
+            BluetoothDevice t = selectedDevice();
+            Boolean up = t == null ? Boolean.FALSE : headsetUp(t);
+            long next = t == null ? -1 : auto.linkLost(eligible(t), Boolean.TRUE.equals(up),
+                    SystemClock.elapsedRealtime() - linkSince);
+            if (next >= 0 && started) { setStatus(2, "Connecting..."); main.postDelayed(autoRun, next); }
+            else if (!showWaiting()) setStatus(0, "Connection lost. Tap Connect.");
         });
+    }
+
+    // ---- auto-connect helpers (decisions in AutoConnect)
+
+    private boolean eligible(BluetoothDevice d) {
+        return AutoConnect.eligible(nameOf(d), prefs.getStringSet("autoOk", new HashSet<>()).contains(d.getAddress()));
+    }
+
+    /** A device the user connected by hand may be auto-connected later (similar Sennheiser models). */
+    private void rememberByHand(BluetoothDevice d) {
+        Set<String> ok = new HashSet<>(prefs.getStringSet("autoOk", new HashSet<>()));
+        if (ok.add(d.getAddress())) prefs.edit().putStringSet("autoOk", ok).apply();
+    }
+
+    /** Is d connected to the phone (ACL seen, A2DP or headset profile)? null = can't tell yet. */
+    @SuppressWarnings("MissingPermission")
+    private Boolean headsetUp(BluetoothDevice d) {
+        if (d == null || !hasBtPermission()) return null;
+        if (aclUp.contains(d.getAddress())) return true;
+        if (a2dp == null && headsetProfile == null) return null;
+        try {
+            for (BluetoothProfile p : new BluetoothProfile[]{a2dp, headsetProfile}) {
+                if (p != null && p.getConnectionState(d) == BluetoothProfile.STATE_CONNECTED) return true;
+            }
+        } catch (SecurityException e) {
+            return null;
+        }
+        return false;
+    }
+
+    /** On open, after a re-scan or a pick, once the proxies answer: link at once if the headset is up. */
+    private void autoCheck() {
+        if (!started || destroyed || socket != null || connecting) return;
+        BluetoothDevice t = selectedDevice();
+        if (t == null) return;
+        Boolean up = headsetUp(t);
+        if (up == null) return;                          // the proxy callback calls back
+        if (auto.check(eligible(t), up) >= 0) connect(false);
+        else if (!up) showWaiting();                     // keeps a more specific text otherwise
+    }
+
+    private void autoAttempt() {
+        if (!started || destroyed || socket != null || connecting || auto.held()) return;
+        BluetoothDevice t = selectedDevice();
+        if (t == null || !eligible(t)) { showIdle(); return; }
+        if (Boolean.FALSE.equals(headsetUp(t))) { showIdle(); return; }
+        connect(false);
+    }
+
+    @SuppressWarnings("MissingPermission")
+    private void onHeadsetEvent(Intent intent) {
+        BluetoothDevice d = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+        BluetoothDevice t = selectedDevice();
+        if (d == null || t == null || !d.getAddress().equals(t.getAddress())) return;
+        String a = intent.getAction();
+        boolean up;
+        if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(a)) { aclUp.add(d.getAddress()); up = true; }
+        else if (BluetoothDevice.ACTION_ACL_DISCONNECTED.equals(a)) { aclUp.remove(d.getAddress()); up = false; }
+        else {
+            int st = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, -1);
+            if (st == BluetoothProfile.STATE_CONNECTED) up = true;
+            else if (st == BluetoothProfile.STATE_DISCONNECTED) up = Boolean.TRUE.equals(headsetUp(t));
+            else return;
+        }
+        if (up) {
+            long next = auto.headsetUp(eligible(t));     // also ends a Disconnect hold
+            if (next < 0 || socket != null || connecting) return;
+            append(nameOf(t) + " connected to the phone.");
+            setStatus(2, "Connecting...");
+            main.removeCallbacks(autoRun);               // ACL, then each profile: try once, after the last
+            main.postDelayed(autoRun, next);
+        } else {
+            auto.headsetDown();
+            main.removeCallbacks(autoRun);
+            if (socket == null && !connecting) showIdle();
+        }
+    }
+
+    /** Status while not linked: "Waiting for MOMENTUM 4" when it is off the phone, else "Not connected". */
+    private void showIdle() {
+        if (!showWaiting()) setStatus(0, "Not connected");
+    }
+
+    private boolean showWaiting() {
+        BluetoothDevice t = selectedDevice();
+        String w = t == null ? null : AutoConnect.idleText(auto.held(), eligible(t), headsetUp(t), nameOf(t));
+        if (w == null) return false;
+        setStatus(3, w);
+        return true;
+    }
+
+    private void closeProxy(int profile, BluetoothProfile proxy) {
+        if (proxy == null) return;
+        BluetoothAdapter adapter = ((BluetoothManager) getSystemService(BLUETOOTH_SERVICE)).getAdapter();
+        if (adapter != null) adapter.closeProfileProxy(profile, proxy);
     }
 
     private void setConnected(boolean on) {
@@ -1682,6 +1866,8 @@ public class MainActivity extends Activity {
 
     private void disconnect() {
         userDisconnect = true;
+        auto.userDisconnected();
+        main.removeCallbacks(autoRun);
         closeQuietly();
         append("Disconnected by user.");
         runOnUiThread(() -> { setConnected(false); setStatus(0, "Not connected"); });
@@ -1762,8 +1948,8 @@ public class MainActivity extends Activity {
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 2);
         }
-        closeQuietly();
-        runOnUiThread(() -> setConnected(false));
+        // No link drop here any more: the guard's own socket works while the app holds one (T42),
+        // and with auto-connect a dropped link would only come straight back.
         AutoOffService.start(this, device.getAddress(), minutes * 60_000L);
         append("Idle guard started (" + minutes + " min).");
         refreshGuardButton();
