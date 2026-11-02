@@ -2,6 +2,27 @@
 
 Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control channel (RFCOMM, UUID `a2129ff3-081b-4c45-8afe-469d9c4842ec`) and sends single commands. No internet permission, no libraries, Bluetooth only.
 
+## v0.14.3: safety and release fixes from an outside code audit
+- **Raw frame field:** it now takes exactly one complete frame. Typos in the hex are refused instead of dropped, and a second frame or stray bytes are refused, so a permitted frame can no longer carry a blocked one with it. Every send in the app passes the same check.
+- **Shared text:** Copy report and Copy log replace a renamed headset's name ("John's MOMENTUM 4") with "MOMENTUM (custom name hidden)". Only the stock name is shown.
+- **Guard:** idle time is measured with the monotonic clock, so a phone clock change can't shorten it and fire the power-off early.
+- The PC client's sweep is off by default; the `raw` command is strict like the app. Python tests and the blocklist parity test now run in CI, and a manual release run refuses a version that already has a release.
+- Same commands as v0.14.2 (sorted send/toggle diff); screens unchanged.
+
+## v0.14.2: auto-connect
+- The app opens its link to the headphones by itself, like Smart Control: when you open it with the MOMENTUM 4 already connected to the phone, and when the headphones connect while the app is open (after about 2 s, up to 3 tries). The Connect button stays.
+- Headphones not on the phone: the status reads "Waiting for MOMENTUM 4" and the app connects when they come back.
+- Only devices named MOMENTUM, or a device you connected by hand once (for similar Sennheiser models), are connected by themselves. After Disconnect the app waits until the headphones reconnect to the phone or you come back to the app.
+- Foreground only: no new permission, no background service, works with battery restrictions on.
+- Starting the guard no longer drops the app's link (the guard uses its own, T42).
+- Same commands as v0.14.1 (sorted send/toggle diff).
+
+## v0.14.1: fixes from the v0.14.0 laptop run
+- Device page: the headphones picker shows the chosen name again ("MOMENTUM 4 · Tap to choose another paired device"); tapping it opens the list of paired devices (T50).
+- Auto power-off: when the guard sends the power-off and stops, the page and the Home tile switch to "Sent" right away, without reopening the app (T53).
+- The GitHub release now ships the same APK file as `release/`, so its SHA-256 matches `SHA256SUMS` (T43).
+- Same commands as v0.14.0.
+
 ## v0.14.0: design v4 (docs/design-spec-v4.md)
 - Home in the Nothing X style: battery in dot numbers, the headphones' name, a noise card with three round buttons, two-column tiles (Equaliser, Listening, Auto power-off with an on/off switch, Device), and a "Power off now" row. The cog opens Device.
 - Equaliser: five vertical faders in the Poweramp style. Drag one, or sweep across several to draw a curve; double-tap a fader to reset it to 0. A dot-matrix curve sits under them. Presets open from the name pill as a list with small curve pictures.

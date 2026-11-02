@@ -2,7 +2,7 @@
 
 A command-line tool to talk to the MOMENTUM 4 over its GAIA control channel (Bluetooth Classic, RFCOMM), from Windows or Linux. Pure Python 3.9+, no packages to install. See `../docs/protocol.md` for the protocol and the power-off candidate list.
 
-Tested against a real headset on Windows 10 with Python 3.12 (22 Oct 2026): `verify`, `battery` and the `--features 3` sweep work. The sweep found the remote power-off command `0495:0605` (see `../docs/search-log.md`).
+Tested against a real headset on Windows 10 with Python 3.12: `verify`, `battery`, `snapshot` and `check` work. On 22 Oct 2026 a scoped sweep of the power/battery feature found the remote power-off command `0495:0605` (see `../docs/search-log.md`). That sweep is now off by default (see below).
 
 ## Before you run
 1. The headset must not be in use by any other GAIA app. On the phone that normally holds it, force stop Smart Control Plus, or just keep the headphones away from the phone.
@@ -29,20 +29,15 @@ Set a timer (seconds):
 python gaia_client.py set-timer 0 900
 ```
 
-## The power-off search
-```
-python gaia_client.py sweep --features 3
-```
-This sends, one per second, every unknown request command in the power/battery feature with an empty payload, and logs the reply. It stops and prints the command if the link drops and then refuses to reconnect for 60 s (the sign of a real power-off), and keeps going if the link just resets.
+## Sweeps are off by default
+The power-off command is already known (`0495:0605`), so the blind sweep that found it is disabled: `python gaia_client.py sweep` refuses to run. A sweep sends undocumented commands to your headphones, one per second.
 
-Scopes (`--features`): `3` power/battery (default, start here), `0q` Qualcomm core, `2` on-head/physical, `0s` Sennheiser config, `all` the ranked set. Range of request-command numbers: `--range 4:127` (default).
+For research only, at your own risk, set `M4_ALLOW_SWEEP=1` first. Even then it skips every command the catalogue (`../tools/m4_commands.py`) marks as never sent from the PC, including `0605`, and everything on the blocklist. Scopes (`--features`): `3` power/battery, `0q` Qualcomm core, `2` on-head/physical, `0s` Sennheiser config, `all`. Range of request-command numbers: `--range 4:127` (default).
 
-When it finds a candidate, check the headphones: red LED blinking 3x and staying off means it worked. Paste the log here either way.
+`raw` takes exactly one complete frame (`FF 03`, a length that matches, nothing after it). A typo in the hex, a second frame or stray bytes is refused and nothing is sent.
 
 ## Safety
-The tool refuses to send, whatever you type: factory reset (`0495:0040`), firmware-update / DFU mode (`0495` feature 1), deleting or disconnecting paired devices (`0495:1403/1405/1406`), the reset commands next to power-off (`0495:0607`, `0609-06FF`), device rename (`0495:1500`), and Qualcomm's upgrade feature (`001D` feature 6). `tools/blocklist_parity_test.py` checks that the app blocks the same. The default sweep stays inside features identified as power/system; it never sweeps all features, and it never sweeps the unknown features 16/19 (those need careful manual identification first, see `../docs/protocol.md`).
-
-Worst realistic outcome of a sweep: a "ship/transport mode" that needs a USB charger plug to wake. Annoying, reversible. Stop and report if the headset goes unresponsive without the 60 s reconnect test passing.
+The tool refuses to send, whatever you type: factory reset (`0495:0040`), firmware-update / DFU mode (`0495` feature 1), deleting or disconnecting paired devices (`0495:1403/1405/1406`), the reset commands next to power-off (`0495:0607`, `0609-06FF`), device rename (`0495:1500`), and Qualcomm's upgrade feature (`001D` feature 6). `tools/blocklist_parity_test.py` checks that the app blocks the same. A sweep (if you enable one) stays inside features identified as power/system and never touches the unknown features 16/19 (those need careful manual identification first, see `../docs/protocol.md`). Worst realistic outcome: a "ship/transport mode" that needs a USB charger plug to wake. Annoying, reversible. Stop and report if the headset goes unresponsive.
 
 ## Options
 ```

@@ -5,7 +5,10 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothA2dp;
+import android.bluetooth.BluetoothHeadset;
 import android.bluetooth.BluetoothManager;
+import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothSocket;
 import android.content.BroadcastReceiver;
 import android.content.ClipData;
@@ -22,19 +25,20 @@ import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
-import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -45,8 +49,10 @@ import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -58,7 +64,8 @@ public class MainActivity extends Activity {
     private final List<View> gated = new ArrayList<>();            // disabled when not connected
     private final ExecutorService sender = Executors.newSingleThreadExecutor();
 
-    private Spinner deviceSpinner;
+    private int deviceIndex = -1;                                    // index into devices, -1 = none
+    private TextView deviceTitle;
     private TextView statusLine, statusDetail, noiseHint, guardUnit, heroName;
     private TextView tileSound, tileListen, tileDevice, tileGuardSub;
     private DotNumerals batteryDots, guardDots;
@@ -103,6 +110,42 @@ public class MainActivity extends Activity {
         }
     };
 
+    // ---- Auto-connect (v0.14.2): open the GAIA link as soon as the headset is on the phone, like
+    // Smart Control does. Foreground only (onStart..onStop): no service, no battery exemption.
+    private final AutoConnect auto = new AutoConnect();
+    private final Handler main = new Handler(Looper.getMainLooper());
+    private final Set<String> aclUp = new HashSet<>();   // addresses with an ACL link seen while started
+    private BluetoothProfile a2dp, headsetProfile;
+    private boolean started;
+    private long linkSince;                              // elapsedRealtime when the current link came up
+    private final Runnable autoRun = this::autoAttempt;
+
+    private final BluetoothProfile.ServiceListener profileListener = new BluetoothProfile.ServiceListener() {
+        @Override
+        public void onServiceConnected(int profile, BluetoothProfile proxy) {
+            if (!started) { closeProxy(profile, proxy); return; }
+            if (profile == BluetoothProfile.A2DP) a2dp = proxy; else headsetProfile = proxy;
+            autoCheck();
+        }
+
+        @Override
+        public void onServiceDisconnected(int profile) {
+            if (profile == BluetoothProfile.A2DP) a2dp = null; else headsetProfile = null;
+        }
+    };
+
+    // The selected headset joining or leaving the phone (ACL, A2DP, headset profile).
+    private final BroadcastReceiver linkReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context ctx, Intent intent) { onHeadsetEvent(intent); }
+    };
+
+    // T53: the guard sends 0605 and stops itself while the app is open; redraw the page and tile then.
+    private final BroadcastReceiver guardReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context ctx, Intent intent) { applyGuardState(); }
+    };
+
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -145,11 +188,35 @@ public class MainActivity extends Activity {
         f.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
         f.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
         registerReceiver(btReceiver, f);
+        IntentFilter lf = new IntentFilter();
+        lf.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
+        lf.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
+        lf.addAction(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED);
+        lf.addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED);
+        registerReceiver(linkReceiver, lf);
+        started = true;
+        auto.foreground();
+        BluetoothAdapter adapter = ((BluetoothManager) getSystemService(BLUETOOTH_SERVICE)).getAdapter();
+        if (adapter != null) {
+            adapter.getProfileProxy(this, profileListener, BluetoothProfile.A2DP);
+            adapter.getProfileProxy(this, profileListener, BluetoothProfile.HEADSET);
+        }
+        IntentFilter gf = new IntentFilter(AutoOffService.ACTION_STATE);
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(guardReceiver, gf, Context.RECEIVER_NOT_EXPORTED);
+        else registerReceiver(guardReceiver, gf);
     }
 
     @Override
     protected void onStop() {
         try { unregisterReceiver(btReceiver); } catch (IllegalArgumentException ignored) {}
+        try { unregisterReceiver(guardReceiver); } catch (IllegalArgumentException ignored) {}
+        try { unregisterReceiver(linkReceiver); } catch (IllegalArgumentException ignored) {}
+        started = false;
+        main.removeCallbacks(autoRun);
+        aclUp.clear();                                   // we miss ACL changes while stopped
+        closeProxy(BluetoothProfile.A2DP, a2dp);
+        closeProxy(BluetoothProfile.HEADSET, headsetProfile);
+        a2dp = null; headsetProfile = null;
         super.onStop();
     }
 
@@ -572,19 +639,26 @@ public class MainActivity extends Activity {
         tileDevice.setText((modelText == null ? "MOMENTUM 4" : modelText) + (hwText == null ? "" : " · hw " + hwText));
     }
 
-    /** Guard tile subtitle and icon: copper "Armed · 15 min" while running. */
+    /** Guard tile subtitle and icon: copper "Armed · 15 min" while running, "Sent · 14:05" after it fired. */
     private void refreshGuardSummary() {
         if (tileGuardSub == null) return;
-        boolean on = AutoOffService.running;
-        tileGuardSub.setText(on ? "Armed · " + prefs.getInt("minutes", 15) + " min" : "Off");
-        tileGuardSub.setTextColor(on ? T.copper : T.ink2);
-        if (guardIcon != null) guardIcon.setImageTintList(ColorStateList.valueOf(on ? T.copper : T.ink2));
+        GuardState g = guardState();
+        tileGuardSub.setText(g.tile);
+        tileGuardSub.setTextColor(g.on ? T.copper : T.ink2);
+        if (guardIcon != null) guardIcon.setImageTintList(ColorStateList.valueOf(g.on ? T.copper : T.ink2));
+    }
+
+    private GuardState guardState() {
+        long fired = AutoOffService.firedAt;
+        return GuardState.of(AutoOffService.running, fired, AutoOffService.lastSendFailed, prefs.getInt("minutes", 15),
+                fired > 0 ? new SimpleDateFormat("HH:mm", Locale.ROOT).format(new Date(fired)) : "");
     }
 
     @SuppressWarnings("MissingPermission")
     private void showDeviceName() {
         BluetoothDevice d = selectedDevice();
         curName = d == null ? "MOMENTUM 4" : (d.getName() == null ? d.getAddress() : d.getName());
+        if (deviceTitle != null) deviceTitle.setText(DevicePick.rowTitle(d == null ? null : nameOf(d), devices.size()));
         renderStatus();
         refreshGuardTarget();
     }
@@ -592,7 +666,7 @@ public class MainActivity extends Activity {
     @SuppressWarnings("MissingPermission")
     private static String nameOf(BluetoothDevice d) { return d.getName() == null ? d.getAddress() : d.getName(); }
 
-    private static boolean isMomentum(BluetoothDevice d) { return nameOf(d).toUpperCase(Locale.ROOT).contains("MOMENTUM"); }
+    private static boolean isMomentum(BluetoothDevice d) { return DevicePick.looksLikeMomentum(nameOf(d)); }
 
     /** Which device the guard, widgets and tiles act on (T35: a stale saved TV caused silent failures). */
     private void refreshGuardTarget() {
@@ -618,15 +692,16 @@ public class MainActivity extends Activity {
 
     private void renderStatus() {
         if (statusLine == null) return;
-        String dot = statusKind == 1 ? "●" : statusKind == 2 ? "◌" : "○";
+        String dot = statusKind == 1 ? "●" : statusKind == 2 ? "◌" : "○";   // 3 = waiting: hollow too
         int col = statusKind == 1 ? T.pilot : statusKind == 2 ? Tok.alpha(T.pilot, 0.4f) : T.ruleStrong;
-        String state = statusKind == 1 ? "Connected" : statusKind == 2 ? "Connecting..." : "Not connected";
+        String state = statusKind == 1 ? "Connected" : statusKind == 2 ? "Connecting..."
+                : statusKind == 3 ? statusText : "Not connected";
         if (statusKind == 1 && fwText != null) state += " · fw " + fwText;
         android.text.SpannableString sp = new android.text.SpannableString(dot + "  " + state);
         sp.setSpan(new android.text.style.ForegroundColorSpan(col), 0, 1, 0);
         statusLine.setText(sp);
         heroName.setText(curName);
-        boolean plain = statusText.isEmpty() || statusText.equals("Connected") || statusText.equals("Not connected")
+        boolean plain = statusKind == 3 || statusText.isEmpty() || statusText.equals("Connected") || statusText.equals("Not connected")
                 || statusText.equals("Connecting...");
         statusDetail.setText(plain ? "" : statusText);
         statusDetail.setVisibility(plain ? View.GONE : View.VISIBLE);
@@ -640,26 +715,11 @@ public class MainActivity extends Activity {
         LinearLayout c = subPage("Device", refresh, true);
 
         LinearLayout hp = group(c, "Headphones");
-        LinearLayout pick = new LinearLayout(this);
-        pick.setGravity(Gravity.CENTER_VERTICAL);
-        pick.setMinimumHeight(dp(64));
-        pick.setPadding(dp(16), dp(6), dp(8), dp(6));
-        ImageView hi = icon(R.drawable.ic_headphones, T.ink2, 18);
-        ((LinearLayout.LayoutParams) hi.getLayoutParams()).rightMargin = dp(6);
-        pick.addView(hi);
-        LinearLayout pt = new LinearLayout(this);
-        pt.setOrientation(LinearLayout.VERTICAL);
-        deviceSpinner = new Spinner(this);
-        deviceSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            public void onItemSelected(android.widget.AdapterView<?> p, View v, int pos, long id) { showDeviceName(); }
-            public void onNothingSelected(android.widget.AdapterView<?> p) { showDeviceName(); }
-        });
-        pt.addView(deviceSpinner);
-        TextView ps = caption("Tap to choose another paired device");
-        ps.setPadding(dp(8), 0, 0, 0);
-        pt.addView(ps);
-        pick.addView(pt, new LinearLayout.LayoutParams(0, -2, 1f));
-        hp.addView(pick);
+        // T50: the closed Spinner drew blank on the Flip6 (no selected-item view). A plain row with
+        // the chosen name, the caption and a chevron, opening a single-choice list, cannot go blank.
+        LinearLayout pick = navRow(hp, R.drawable.ic_headphones, "MOMENTUM 4", "Tap to choose another paired device",
+                v -> chooseDevice());
+        deviceTitle = (TextView) ((LinearLayout) pick.getChildAt(1)).getChildAt(0);
         navRow(hp, R.drawable.ic_refresh, "Rescan", "Look again for paired headphones", v -> rescan());
         shapeGroup(hp);
 
@@ -1550,25 +1610,23 @@ public class MainActivity extends Activity {
         BluetoothDevice current = selectedDevice();
         String keep = current != null ? current.getAddress() : prefs.getString("dev", "");
         devices.clear();
-        List<String> names = new ArrayList<>();
-        int preselect = 0;
+        List<String> names = new ArrayList<>(), addrs = new ArrayList<>();
         boolean sawMomentum = false;
         for (BluetoothDevice d : adapter.getBondedDevices()) {
-            String name = d.getName() == null ? d.getAddress() : d.getName();
-            boolean isM4 = name.toUpperCase(Locale.ROOT).contains("MOMENTUM");
-            if (isM4) sawMomentum = true;
-            if (d.getAddress().equals(keep) || (keep.isEmpty() && isM4)) preselect = devices.size();
+            String name = nameOf(d);
+            if (DevicePick.looksLikeMomentum(name)) sawMomentum = true;
             devices.add(d);
             names.add(name);
+            addrs.add(d.getAddress());
         }
-        deviceSpinner.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, names));
-        if (!devices.isEmpty()) deviceSpinner.setSelection(preselect);
+        deviceIndex = DevicePick.preselect(addrs, names, keep);
         showDeviceName();
         if (socket == null && !connecting) {
             if (devices.isEmpty()) setStatus(0, "No paired headphones. Pair them in Android Settings > Bluetooth, then tap Rescan.");
             else if (!sawMomentum) setStatus(0, "No MOMENTUM 4 among the paired devices. Pair it, then tap Rescan.");
-            else setStatus(0, "Not connected");
+            else showIdle();
         }
+        autoCheck();
 
         if (devices.isEmpty()) {
             append("No paired Bluetooth devices. Pair the MOMENTUM 4 in Android Settings > Bluetooth, then tap Rescan.");
@@ -1578,17 +1636,44 @@ public class MainActivity extends Activity {
     }
 
     private BluetoothDevice selectedDevice() {
-        int i = deviceSpinner.getSelectedItemPosition();
+        int i = deviceIndex;
         return (i >= 0 && i < devices.size()) ? devices.get(i) : null;
     }
 
+    /** The picker's list: paired devices, the current one checked. Picking only changes the target. */
+    private void chooseDevice() {
+        if (devices.isEmpty()) { rescan(); return; }
+        String[] names = new String[devices.size()];
+        for (int i = 0; i < names.length; i++) names[i] = nameOf(devices.get(i));
+        new AlertDialog.Builder(this, R.style.AlertTheme)
+                .setTitle("Headphones")
+                .setSingleChoiceItems(names, deviceIndex, (d, which) -> {
+                    deviceIndex = which;
+                    showDeviceName();
+                    d.dismiss();
+                    if (socket == null && !connecting) { main.removeCallbacks(autoRun); showIdle(); autoCheck(); }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    /** The Connect button. */
+    private void connect() { connect(true); }
+
+    /**
+     * Opens the GAIA link to the selected device. byHand = the Connect button: on success the device
+     * is remembered as OK to auto-connect. Automatic tries log one short line and retry with back-off.
+     */
     @SuppressWarnings("MissingPermission")
-    private void connect() {
+    private void connect(boolean byHand) {
         if (socket != null) { append("Already connected."); return; }
+        if (connecting) return;
         BluetoothDevice device = selectedDevice();
-        if (device == null) { toast("No device"); return; }
+        if (device == null) { if (byHand) toast("No device"); return; }
+        main.removeCallbacks(autoRun);
+        if (byHand) auto.manualConnect();
         prefs.edit().putString("dev", device.getAddress()).putString("devName", nameOf(device)).apply();
-        append("Connecting...");
+        append(byHand ? "Connecting..." : "Auto-connecting to " + nameOf(device) + "...");
         connecting = true;
         userDisconnect = false;
         setStatus(2, "Connecting...");
@@ -1600,16 +1685,26 @@ public class MainActivity extends Activity {
                 socket = s;
                 out = s.getOutputStream();
                 if (destroyed) { closeQuietly(); return; }   // rotated or closed while connecting: don't keep the link
-                runOnUiThread(() -> { setConnected(true); registerNotifications(); readAllConfig(); });
+                runOnUiThread(() -> {
+                    linkSince = SystemClock.elapsedRealtime();
+                    if (byHand) rememberByHand(device);
+                    setConnected(true); registerNotifications(); readAllConfig();
+                });
                 readLoop(s, s.getInputStream());
             } catch (IOException e) {
-                append("Connect failed: " + e.getMessage()
-                        + "\nTry: force stop Smart Control Plus; make sure the MOMENTUM 4 is connected to this device;"
-                        + " if it is paired to two other devices (multipoint), disconnect one. Then Connect again.");
                 closeQuietly();
+                if (byHand) {
+                    append("Connect failed: " + e.getMessage()
+                            + "\nTry: force stop Smart Control Plus; make sure the MOMENTUM 4 is connected to this device;"
+                            + " if it is paired to two other devices (multipoint), disconnect one. Then Connect again.");
+                }
                 runOnUiThread(() -> {
                     setConnected(false);
-                    setStatus(0, "Couldn't reach the headphones. They may be off or held by Smart Control (force-stop it).");
+                    long next = byHand ? -1 : auto.tryFailed(Boolean.TRUE.equals(headsetUp(device)));
+                    if (!byHand) append("Auto-connect failed: " + e.getMessage()
+                            + (next >= 0 ? " (next try in " + next / 1000 + " s)" : ""));
+                    if (next >= 0 && started) { setStatus(2, "Connecting..."); main.postDelayed(autoRun, next); }
+                    else setStatus(0, "Couldn't reach the headphones. They may be off or held by Smart Control (force-stop it).");
                 });
             }
         }).start();
@@ -1634,8 +1729,111 @@ public class MainActivity extends Activity {
         closeQuietly();
         runOnUiThread(() -> {
             setConnected(false);
-            setStatus(0, userDisconnect ? "Not connected" : "Connection lost. Tap Connect.");
+            if (userDisconnect) { setStatus(0, "Not connected"); return; }
+            // Lost without a Disconnect tap (headset switched off, out of range, guard fired):
+            // reconnect if it is still on the phone, else wait for it.
+            BluetoothDevice t = selectedDevice();
+            Boolean up = t == null ? Boolean.FALSE : headsetUp(t);
+            long next = t == null ? -1 : auto.linkLost(eligible(t), Boolean.TRUE.equals(up),
+                    SystemClock.elapsedRealtime() - linkSince);
+            if (next >= 0 && started) { setStatus(2, "Connecting..."); main.postDelayed(autoRun, next); }
+            else if (!showWaiting()) setStatus(0, "Connection lost. Tap Connect.");
         });
+    }
+
+    // ---- auto-connect helpers (decisions in AutoConnect)
+
+    private boolean eligible(BluetoothDevice d) {
+        return AutoConnect.eligible(nameOf(d), prefs.getStringSet("autoOk", new HashSet<>()).contains(d.getAddress()));
+    }
+
+    /** A device the user connected by hand may be auto-connected later (similar Sennheiser models). */
+    private void rememberByHand(BluetoothDevice d) {
+        Set<String> ok = new HashSet<>(prefs.getStringSet("autoOk", new HashSet<>()));
+        if (ok.add(d.getAddress())) prefs.edit().putStringSet("autoOk", ok).apply();
+    }
+
+    /** Is d connected to the phone (ACL seen, A2DP or headset profile)? null = can't tell yet. */
+    @SuppressWarnings("MissingPermission")
+    private Boolean headsetUp(BluetoothDevice d) {
+        if (d == null || !hasBtPermission()) return null;
+        if (aclUp.contains(d.getAddress())) return true;
+        if (a2dp == null && headsetProfile == null) return null;
+        try {
+            for (BluetoothProfile p : new BluetoothProfile[]{a2dp, headsetProfile}) {
+                if (p != null && p.getConnectionState(d) == BluetoothProfile.STATE_CONNECTED) return true;
+            }
+        } catch (SecurityException e) {
+            return null;
+        }
+        return false;
+    }
+
+    /** On open, after a re-scan or a pick, once the proxies answer: link at once if the headset is up. */
+    private void autoCheck() {
+        if (!started || destroyed || socket != null || connecting) return;
+        BluetoothDevice t = selectedDevice();
+        if (t == null) return;
+        Boolean up = headsetUp(t);
+        if (up == null) return;                          // the proxy callback calls back
+        if (auto.check(eligible(t), up) >= 0) connect(false);
+        else if (!up) showWaiting();                     // keeps a more specific text otherwise
+    }
+
+    private void autoAttempt() {
+        if (!started || destroyed || socket != null || connecting || auto.held()) return;
+        BluetoothDevice t = selectedDevice();
+        if (t == null || !eligible(t)) { showIdle(); return; }
+        if (Boolean.FALSE.equals(headsetUp(t))) { showIdle(); return; }
+        connect(false);
+    }
+
+    @SuppressWarnings("MissingPermission")
+    private void onHeadsetEvent(Intent intent) {
+        BluetoothDevice d = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+        BluetoothDevice t = selectedDevice();
+        if (d == null || t == null || !d.getAddress().equals(t.getAddress())) return;
+        String a = intent.getAction();
+        boolean up;
+        if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(a)) { aclUp.add(d.getAddress()); up = true; }
+        else if (BluetoothDevice.ACTION_ACL_DISCONNECTED.equals(a)) { aclUp.remove(d.getAddress()); up = false; }
+        else {
+            int st = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, -1);
+            if (st == BluetoothProfile.STATE_CONNECTED) up = true;
+            else if (st == BluetoothProfile.STATE_DISCONNECTED) up = Boolean.TRUE.equals(headsetUp(t));
+            else return;
+        }
+        if (up) {
+            long next = auto.headsetUp(eligible(t));     // also ends a Disconnect hold
+            if (next < 0 || socket != null || connecting) return;
+            append(nameOf(t) + " connected to the phone.");
+            setStatus(2, "Connecting...");
+            main.removeCallbacks(autoRun);               // ACL, then each profile: try once, after the last
+            main.postDelayed(autoRun, next);
+        } else {
+            auto.headsetDown();
+            main.removeCallbacks(autoRun);
+            if (socket == null && !connecting) showIdle();
+        }
+    }
+
+    /** Status while not linked: "Waiting for MOMENTUM 4" when it is off the phone, else "Not connected". */
+    private void showIdle() {
+        if (!showWaiting()) setStatus(0, "Not connected");
+    }
+
+    private boolean showWaiting() {
+        BluetoothDevice t = selectedDevice();
+        String w = t == null ? null : AutoConnect.idleText(auto.held(), eligible(t), headsetUp(t), nameOf(t));
+        if (w == null) return false;
+        setStatus(3, w);
+        return true;
+    }
+
+    private void closeProxy(int profile, BluetoothProfile proxy) {
+        if (proxy == null) return;
+        BluetoothAdapter adapter = ((BluetoothManager) getSystemService(BLUETOOTH_SERVICE)).getAdapter();
+        if (adapter != null) adapter.closeProfileProxy(profile, proxy);
     }
 
     private void setConnected(boolean on) {
@@ -1652,6 +1850,12 @@ public class MainActivity extends Activity {
     }
 
     private void send(byte[] frame) {
+        String bad = Gaia.singleFrameProblem(frame);          // exactly one complete frame, so blockedReason sees all of it
+        if (bad != null) {
+            append("BLOCKED (" + bad + "): " + Gaia.hex(frame));
+            toast("Not sent: " + bad + ". One complete frame at a time.");
+            return;
+        }
         String blocked = Gaia.blockedReason(frame);
         if (blocked != null) {
             append("BLOCKED (" + blocked + "): " + Gaia.hex(frame));
@@ -1668,6 +1872,8 @@ public class MainActivity extends Activity {
 
     private void disconnect() {
         userDisconnect = true;
+        auto.userDisconnected();
+        main.removeCallbacks(autoRun);
         closeQuietly();
         append("Disconnected by user.");
         runOnUiThread(() -> { setConnected(false); setStatus(0, "Not connected"); });
@@ -1748,8 +1954,8 @@ public class MainActivity extends Activity {
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 2);
         }
-        closeQuietly();
-        runOnUiThread(() -> setConnected(false));
+        // No link drop here any more: the guard's own socket works while the app holds one (T42),
+        // and with auto-connect a dropped link would only come straight back.
         AutoOffService.start(this, device.getAddress(), minutes * 60_000L);
         append("Idle guard started (" + minutes + " min).");
         refreshGuardButton();
@@ -1767,7 +1973,6 @@ public class MainActivity extends Activity {
     private void applyGuardState() {
         if (guardButton == null) return;
         boolean on = AutoOffService.running;
-        int min = prefs.getInt("minutes", 15);
         guardButton.setText(on ? "Stop guard" : "Start guard");
         if (on) styleSunk(guardButton); else styleFilled(guardButton);
         if (guardSwitch != null && guardSwitch.isChecked() != on && System.currentTimeMillis() >= guardPendingUntil) {
@@ -1775,26 +1980,24 @@ public class MainActivity extends Activity {
             guardSwitch.setChecked(on);
             guardApplying = false;
         }
-        long fired = AutoOffService.firedAt;
-        boolean justFired = !on && fired > 0;
-        guardDots.set(on ? String.valueOf(min) : justFired ? "SENT" : "OFF", on,
-                on ? "Guard on, " + min + " minutes idle" : justFired ? "Power-off sent" : "Guard off");
-        guardUnit.setText(on ? "minutes idle, then fully off" : justFired ? "power-off sent" : "the guard is off");
+        GuardState g = guardState();
+        guardDots.set(g.dots, g.on, g.dotsDesc);
+        guardUnit.setText(g.unit);
         refreshGuardSummary();
-        if (on && AutoOffService.lastSendFailed) {
-            guardStatus.setText("Couldn't reach the headphones. They may be off already; the guard tries again later.");
-            guardStatus.setTextColor(T.danger);
-        } else {
-            guardStatus.setTextColor(T.ink2);
-            guardStatus.setText(on ? "Armed. Off after " + min + " min with nothing playing and no call."
-                    : justFired ? "Power-off sent at " + new SimpleDateFormat("HH:mm", Locale.ROOT).format(new Date(fired)) + ". Wake them with the button."
-                    : "The guard is not running.");
-        }
+        guardStatus.setText(g.status);
+        guardStatus.setTextColor(g.failed ? T.danger : T.ink2);
         refreshGuardTarget();
     }
 
+    /** Shared text must not carry a renamed headset's name (audit F-11): swap it for the safe label. */
+    @SuppressWarnings("MissingPermission")
+    private String scrubNames(String text) {
+        BluetoothDevice d = selectedDevice();
+        return Report.scrub(text, d == null ? null : nameOf(d), prefs.getString("devName", ""));
+    }
+
     private void copyLog() {
-        ((ClipboardManager) getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("log", Report.redact(log.getText().toString())));
+        ((ClipboardManager) getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("log", scrubNames(Report.redact(log.getText().toString()))));
         toast("Log copied");
     }
 
@@ -1815,8 +2018,8 @@ public class MainActivity extends Activity {
         r.append("Guard: ").append(AutoOffService.running ? "running" : "stopped")
                 .append(", idle time ").append(prefs.getInt("minutes", 15)).append(" min, autostart ")
                 .append(prefs.getBoolean("autostart", false) ? "on" : "off").append('\n');
-        r.append("\n-- guard log (last 40) --\n").append(Report.tail(AutoOffService.getLog(), 40));
-        r.append("\n\n-- app log (last 40) --\n").append(Report.tail(log.getText().toString(), 40)).append('\n');
+        r.append("\n-- guard log (last 40) --\n").append(scrubNames(Report.tail(AutoOffService.getLog(), 40)));
+        r.append("\n\n-- app log (last 40) --\n").append(scrubNames(Report.tail(log.getText().toString(), 40))).append('\n');
         ((ClipboardManager) getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("M4 report", r.toString()));
         toast("Report copied. Paste it in your comment or the report form.");
     }

@@ -183,12 +183,36 @@ final class Gaia {
         return s.toString();
     }
 
+    /**
+     * Hex bytes separated by spaces, commas or colons. Every token must be whole bytes (an even
+     * number of hex digits); anything else is rejected instead of being silently dropped, so a
+     * typo can't change what gets sent (audit F-10).
+     */
     static byte[] parseHex(String text) {
-        String clean = text.replaceAll("[^0-9a-fA-F]", "");
-        if (clean.length() % 2 != 0) throw new IllegalArgumentException("odd number of hex digits");
-        byte[] out = new byte[clean.length() / 2];
-        for (int i = 0; i < out.length; i++) out[i] = (byte) Integer.parseInt(clean.substring(2 * i, 2 * i + 2), 16);
-        return out;
+        String t = text.trim();
+        if (t.isEmpty()) return new byte[0];
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        for (String tok : t.split("[\\s,:]+")) {
+            if (tok.isEmpty() || tok.length() % 2 != 0 || !tok.matches("[0-9a-fA-F]+"))
+                throw new IllegalArgumentException("not whole hex bytes: \"" + tok + "\"");
+            for (int i = 0; i < tok.length(); i += 2) out.write(Integer.parseInt(tok.substring(i, i + 2), 16));
+        }
+        return out.toByteArray();
+    }
+
+    /**
+     * null if f is exactly one complete GAIA v3 frame (FF 03, length field matching, nothing after
+     * it), else the reason. blockedReason() only reads the first 8 bytes, so every send must pass
+     * this first: otherwise a permitted frame followed by a blocked one would go out together (F-01).
+     */
+    static String singleFrameProblem(byte[] f) {
+        if (f == null || f.length == 0) return "no bytes";
+        if (f.length < 8) return "shorter than a frame header";
+        if ((f[0] & 0xFF) != 0xFF || (f[1] & 0xFF) != 0x03) return "not a GAIA v3 frame (FF 03)";
+        int want = 8 + u16(f, 2);
+        if (f.length < want) return "frame cut short";
+        if (f.length > want) return "more than one frame";
+        return null;
     }
 
     static String hex(byte[] b) {

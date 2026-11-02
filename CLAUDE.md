@@ -21,7 +21,8 @@ Full history and test log T1-T42: `docs/history.md`. Read it only when a task ne
 - No Sennheiser or Nothing marks or fonts in the app.
 
 ## Current state (1 Nov 2026)
-- Released: v0.14.0 (1 Nov 2026) = design v4 (`docs/design-spec-v4.md`: Nothing X home, Poweramp `EqFaders` + `EqGesture`, dot-matrix `EqCurve`, preset sheet, grouped rows + line icons `res/drawable/ic_*`, guard page + tile switch) on top of 0.13.0 (guard back-off, Copy report, issue form). Laptop run of v0.14.0 done 1 Nov 2026 (T43-T57, Z Flip6): protocol, guard and widgets PASS; open bugs: blank device picker (T50), guard UI stale after the guard fires (T53), release APK hash differs from `SHA256SUMS` (T43), plus visual notes.
+- Released: v0.14.0 (1 Nov 2026) = design v4 (`docs/design-spec-v4.md`: Nothing X home, Poweramp `EqFaders` + `EqGesture`, dot-matrix `EqCurve`, preset sheet, grouped rows + line icons `res/drawable/ic_*`, guard page + tile switch) on top of 0.13.0 (guard back-off, Copy report, issue form). Laptop run of v0.14.0 done 1 Nov 2026 (T43-T57, Z Flip6): protocol, guard and widgets PASS; open bugs: blank device picker (T50), guard UI stale after the guard fires (T53), release APK hash differs from `SHA256SUMS` (T43), plus visual notes; fixes in #37.
+- Open PRs, stacked, merge in order: #37 = v0.14.1 (device picker, live guard state, release hash), #38 = v0.14.2 (auto-connect), then the audit-fixes PR = v0.14.3 (strict single-frame sends and raw input, PC sweep off by default, report name scrub, monotonic guard clock, Python CI, release guard). `release.yml` publishes the committed APK of the current `versionName`; run it once after the last merge. #36 = laptop run of v0.14.0 (T43-T57).
 - Next: Ryane posts `docs/reddit-post-v2.md`; about 7 days later ONE session turns all replies into `docs/community-reports.md`, ranks fixes, builds one release.
 - Open questions (only from community data or a planned capture): 0605 on other firmware and models; guard on aggressive battery-saver phones; meaning of `1405`, `1800`, `1407` (read-only, never probe).
 
@@ -29,7 +30,7 @@ Full history and test log T1-T42: `docs/history.md`. Read it only when a task ne
 - App: `android/gaia-test/` (pure Java, no libs, minSdk 26, targetSdk 35). `MainActivity` (UI + link; pages Home/Equaliser/Listening/Device/Auto power-off), `EqFaders` (vertical faders), `AutoOffService` (guard), `Gaia` (framing, decode, blocklist), `Remote` + `Widgets` + `*Tile` (one-shot sends), `Presets`, `EqSync`, `Watchdog`, `Tok` + `res/values(-night)/colors.xml` (all colours). JVM tests in `app/src/test`.
 - PC client: `windows-client/gaia_client.py` (snapshot / diff / check; `--addr` or `M4_ADDR`). Tools in `tools/`.
 - Specs: `docs/command-map.md` (every command), `docs/protocol.md`, `docs/config-spec.md`, `docs/design-spec-v3.md`, `docs/design-spec-v4.md` (current design, built in v0.14.0).
-- Releases: bump `versionCode`/`versionName` in `app/build.gradle`, copy the APK to `android/gaia-test/release/` + `SHA256SUMS`, merge, then run `release.yml` on main (tests first; tag must equal v<versionName>). Signing key is public on purpose (`keystore/`).
+- Releases: bump `versionCode`/`versionName` in `app/build.gradle`, copy the APK to `android/gaia-test/release/` + `SHA256SUMS`, merge, then run `release.yml` on main (tests first; tag must equal v<versionName>). `release.yml` publishes the committed APK after checking its `SHA256SUMS` line; it never uploads a CI rebuild (T43). Signing key is public on purpose (`keystore/`).
 
 ## How to work (token budget)
 - One task per session. Read only the files the task names; don't load `docs/history.md` or big specs unless needed.

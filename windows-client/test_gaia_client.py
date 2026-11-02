@@ -195,6 +195,80 @@ class TestTemplates(unittest.TestCase):
         self.assertTrue(G.match("01 ?? 03", b"\x01\x99\x03"))
         self.assertFalse(G.match("01 ??", b"\x01"))
 
+class TestSafetyBoundary(unittest.TestCase):
+    """Audit F-01, F-02, F-10: nothing but one complete, permitted frame is ever sent."""
+
+    ONE = "FF 03 00 00 04 95 06 03"
+
+    def test_parse_hex_strict(self):
+        self.assertEqual(len(G.parse_hex(self.ONE)), 8)
+        self.assertEqual(len(G.parse_hex("ff,03:00 00\t04  95 06 03")), 8)
+        for bad in ("FF 0G", "FF 3 00", "F F", "FF 03 0x00", "FF-03", "FF 03 00 00 04 95 06 0"):
+            with self.assertRaises(ValueError, msg=bad):
+                G.parse_hex(bad)
+
+    def test_single_frame_problem(self):
+        self.assertIsNone(G.single_frame_problem(G.parse_hex(self.ONE)))
+        for bad in ("", "FF 03 00 00 04 95 06", "FF 03 00 02 04 95 06 05 00", "FF 01 00 01 00 0A 02 04 00",
+                    "00 03 00 00 04 95 06 05", self.ONE + " 00"):
+            self.assertIsNotNone(G.single_frame_problem(G.parse_hex(bad)), bad)
+
+    def _link(self):
+        class Sock:
+            def __init__(s): s.sent = []
+            def sendall(s, b): s.sent.append(bytes(b))
+
+        class Log:
+            def __init__(s): s.notes, s.blocked = [], []
+            def tx(s, frame, blocked=None):
+                if blocked: s.blocked.append(blocked)
+            def note(s, m): s.notes.append(m)
+
+        link = G.Link("00:00:00:00:00:00", Log())
+        link.sock = Sock()
+        return link
+
+    def test_link_send_refuses_a_permitted_frame_followed_by_a_blocked_one(self):
+        link = self._link()
+        two = G.parse_hex(self.ONE + " FF 03 00 00 04 95 00 40")     # a read, then a factory reset
+        self.assertIsNone(G.blocked_reason(two))                    # the old gap: only the first frame is read
+        self.assertFalse(link.send(two))
+        self.assertEqual(link.sock.sent, [])
+
+    def test_link_send_sends_one_good_frame(self):
+        link = self._link()
+        self.assertTrue(link.send(G.parse_hex(self.ONE)))
+        self.assertEqual(len(link.sock.sent), 1)
+
+    def test_sweep_off_by_default(self):
+        self.assertFalse(G.sweep_allowed({}))
+        self.assertFalse(G.sweep_allowed({"M4_ALLOW_SWEEP": "0"}))
+        self.assertTrue(G.sweep_allowed({"M4_ALLOW_SWEEP": "1"}))
+
+    def test_sweep_never_sends_power_off(self):
+        sent = []
+
+        class Log:
+            def note(s, m): pass
+
+        class L:
+            log = Log()
+            def send(s, frame): sent.append(frame); return True
+            def read_frames(s, w): return []
+            def alive(s): return True
+
+        real_sleep = G.time.sleep
+        G.time.sleep = lambda *_: None
+        try:
+            G.sweep(L(), "3", 4, 9)                # cmds 0604..0609 of the power feature
+        finally:
+            G.time.sleep = real_sleep
+        cmds = {(f[6] << 8) | f[7] for f in sent}
+        self.assertNotIn(0x0605, cmds)             # POWER OFF: pc_allowed=False
+        self.assertNotIn(0x0607, cmds)             # blocklist
+        self.assertNotIn(0x0609, cmds)             # blocklist
+        self.assertTrue(cmds <= {0x0604, 0x0606, 0x0608}, cmds)
+
 
 if __name__ == "__main__":
     unittest.main()
