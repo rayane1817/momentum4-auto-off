@@ -2,13 +2,13 @@
 
 Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control channel (RFCOMM, UUID `a2129ff3-081b-4c45-8afe-469d9c4842ec`) and sends single commands. No internet permission, no libraries, Bluetooth only.
 
-## v0.15.0: auto-connect
+## v0.14.2: auto-connect
 - The app opens its link to the headphones by itself, like Smart Control: when you open it with the MOMENTUM 4 already connected to the phone, and when the headphones connect while the app is open (after about 2 s, up to 3 tries). The Connect button stays.
 - Headphones not on the phone: the status reads "Waiting for MOMENTUM 4" and the app connects when they come back.
 - Only devices named MOMENTUM, or a device you connected by hand once (for similar Sennheiser models), are connected by themselves. After Disconnect the app waits until the headphones reconnect to the phone or you come back to the app.
 - Foreground only: no new permission, no background service, works with battery restrictions on.
 - Starting the guard no longer drops the app's link (the guard uses its own, T42).
-- Same commands as v0.14.1.
+- Same commands as v0.14.1 (sorted send/toggle diff).
 
 ## v0.14.1: fixes from the v0.14.0 laptop run
 - Device page: the headphones picker shows the chosen name again ("MOMENTUM 4 · Tap to choose another paired device"); tapping it opens the list of paired devices (T50).

@@ -1,11 +1,11 @@
-# Local check: v0.15.0 auto-connect (+ v0.14.1 retest)
+# Local check: v0.14.2 auto-connect (+ v0.14.1 retest)
 
-v0.15.0 opens the GAIA link by itself while the app is in the foreground. The send(...) and toggle(...) calls in MainActivity are identical to main (sorted diff), so this is a link check, not a protocol run. Run the v0.14.1 retest list (PR #37, steps 1-8) in the same session. No `0605` except where a step says so.
+v0.14.2 opens the GAIA link by itself while the app is in the foreground. The send(...) and toggle(...) calls in MainActivity are identical to main (sorted diff), so this is a link check, not a protocol run. Run the v0.14.1 retest list (PR #37, steps 1-8) in the same session. No `0605` except where a step says so.
 
 Record per test: fw, app + version, cups, case, result. Logs: `adb logcat -s M4GAIA`.
 
 ## Setup
-- `adb install -r android/gaia-test/release/m4-gaia-test-0.15.0.apk` (same key, no uninstall). Check versionCode 24.
+- `adb install -r android/gaia-test/release/m4-gaia-test-0.14.2.apk` (same key, no uninstall). Check versionCode 24.
 - Guard stopped, autostart off for steps 1-6 (autostart arms a guard on open).
 - Saved device = MOMENTUM 4 (Device page row).
 

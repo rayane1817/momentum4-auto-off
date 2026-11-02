@@ -110,7 +110,7 @@ public class MainActivity extends Activity {
         }
     };
 
-    // ---- Auto-connect (v0.15.0): open the GAIA link as soon as the headset is on the phone, like
+    // ---- Auto-connect (v0.14.2): open the GAIA link as soon as the headset is on the phone, like
     // Smart Control does. Foreground only (onStart..onStop): no service, no battery exemption.
     private final AutoConnect auto = new AutoConnect();
     private final Handler main = new Handler(Looper.getMainLooper());
