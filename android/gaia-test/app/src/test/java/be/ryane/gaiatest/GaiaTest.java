@@ -1,5 +1,6 @@
 package be.ryane.gaiatest;
 
+import static org.junit.Assert.fail;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -64,5 +65,38 @@ public class GaiaTest {
         int[] ok = {0x0605, 0x0600, 0x0601, 0x0603, 0x0007, 0x1A00, 0x1A04, 0x1A02, 0x1001, 0x1003, 0x0405, 0x0805, 0x0814, 0x1606};
         for (int c : ok) assertNull(String.format("%04X", c), blocked(Gaia.SENNHEISER, c));
         assertNull(Gaia.blockedReason(b("FF 03 00")));        // too short to be a frame
+    }
+
+    // ---- audit F-01 / F-10: raw input
+
+    @Test public void singleFrameAccepted() {
+        assertNull(Gaia.singleFrameProblem(b("FF 03 00 00 04 95 06 05")));
+        assertNull(Gaia.singleFrameProblem(b("FF 03 00 01 04 95 06 01 00")));       // with a payload byte
+    }
+
+    @Test public void permittedFrameFollowedByAnotherIsRejected() {
+        // a harmless read, then a factory reset: blockedReason() alone would only have looked at the first
+        byte[] two = b("FF 03 00 00 04 95 06 03 FF 03 00 00 04 95 00 40");
+        assertNotNull(Gaia.singleFrameProblem(two));
+        assertNull(Gaia.blockedReason(two));      // the old gap, now closed by singleFrameProblem in send()
+    }
+
+    @Test public void malformedFramesAreRejected() {
+        assertNotNull(Gaia.singleFrameProblem(new byte[0]));
+        assertNotNull(Gaia.singleFrameProblem(b("FF 03 00 00 04 95 06")));           // too short
+        assertNotNull(Gaia.singleFrameProblem(b("FF 03 00 02 04 95 06 05 00")));     // length says 2, one byte given
+        assertNotNull(Gaia.singleFrameProblem(b("FF 01 00 01 00 0A 02 04 00")));     // legacy v1 framing
+        assertNotNull(Gaia.singleFrameProblem(b("00 03 00 00 04 95 06 05")));        // no FF
+        assertNotNull(Gaia.singleFrameProblem(b("FF 03 00 00 04 95 06 05 00")));     // stray byte after
+    }
+
+    @Test public void parseHexIsStrict() {
+        assertEquals(8, b("FF 03 00 00 04 95 06 05").length);
+        assertEquals(8, b("ff,03:00 00\t04  95 06 05").length);
+        assertEquals(8, b("FF03000004950605").length);
+        for (String bad : new String[]{"FF 0G", "FF 3 00", "F F", "FF 03 0x00", "FF-03", "FF 03 00 00 04 95 06 0"}) {
+            try { Gaia.parseHex(bad); fail("accepted: " + bad); } catch (IllegalArgumentException expected) { }
+        }
+        assertEquals(0, Gaia.parseHex("   ").length);
     }
 }
