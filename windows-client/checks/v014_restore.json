@@ -1,0 +1,7 @@
+{"name": "v014_restore", "about": "v0.14.0 run: restore the session-start state (EQ -5.0/0/2.6/2.7/1.7, noise Custom with level 0, anti-wind off).",
+ "register": false,
+ "steps": [{"id": "RS", "label": "restore baseline",
+  "actions": [{"set": ["1001", "00 CE"]}, {"set": ["1001", "01 00"]}, {"set": ["1001", "02 1A"]}, {"set": ["1001", "03 1B"]}, {"set": ["1001", "04 11"]},
+              {"get": ["1003", "00"], "expect": "CE 00 1A 1B 11"},
+              {"set": ["1A00", "03 00"]}, {"set": ["1A04", "01"]}, {"set": ["1A00", "01 00"]}, {"set": ["1A02", "00"]},
+              {"get": ["1A01"], "expect": "01 00 02 00 03 00"}, {"get": ["1A05"], "expect": "01"}, {"get": ["1A03"], "expect": "00"}]}]}
