@@ -1,36 +1,41 @@
-# Reddit post v2 (draft, post after v0.13.0 is released)
+# Reddit post v2 (ready, for v0.14.3)
 
-Goal: collect data from other MOMENTUM 4 owners in one parseable format, so the next build round is driven by reports instead of guesses. Post in r/sennheiser. Links assume v0.13.0 ships the "Copy report" button and the GitHub issue form.
+Goal: collect data from other MOMENTUM 4 owners in one parseable format, so the next build round is driven by reports instead of guesses. Post in r/sennheiser. Labels match v0.14.3 (auto-connect, "Power off now" and the Auto power-off switch on Home, Device > Copy report, GitHub "Test report" form).
 
 ---
 
 **Title:** MOMENTUM 4 auto-off fix app: looking for testers on other phones and firmware (5 min)
 
-Hi all. A few weeks ago I posted about the MOMENTUM 4 not really switching off after 15 minutes (it only goes to a standby that keeps Bluetooth on and drains the battery).
+Hi all. A few weeks ago I posted about the MOMENTUM 4 not really switching off after 15 minutes. It only goes into a standby that keeps Bluetooth on and drains the battery.
 
-Short version of what we found:
-- The firmware's own auto-off timer only reaches that standby, on 2.x and on 3.38.3.
-- The headphones do have a real remote "power off" command. It's the same full off as holding the button or closing the case.
-- I built a small free Android app that sends it when your phone has played nothing and had no call for 15 minutes. It also does noise control, EQ presets, and home-screen widgets.
+What we found:
+- The built-in auto-off timer only reaches that standby (seen on 2.x and on 3.38.3).
+- The headphones do accept a remote "power off" command. It's the same full off as holding the button or closing the case.
+- I built a small free Android app that sends it once your phone has played nothing and had no call for the idle time you pick (15 min by default). It also does noise control, EQ with presets, and home-screen widgets.
 
-It works on my headphones and two phones. Now I need data from other setups before I change anything else.
+It works on my M4 (fw 3.38.3) with a Galaxy Z Flip6 and a Nokia XR20. Before I change anything else, I need data from other setups.
 
-**What I'd like from you (any of these helps):**
-1. Install the app: [latest release](https://github.com/rayane1817/momentum4-auto-off/releases/latest). It has no internet permission and is open source.
-2. Connect, then tap **Device > Copy report** and paste the text in a comment or in the [report form](https://github.com/rayane1817/momentum4-auto-off/issues/new/choose). The report has no Bluetooth addresses or personal data: only the phone model, Android version, headphone firmware, and the app's own log.
-3. Tell me:
-   - Did "Power off" switch them fully off? (They shouldn't reconnect until you press the button.)
-   - With the guard on, did they switch off after the idle time?
-   - Did they ever switch off while you were wearing them?
+**How to test (about 5 min):**
+1. Install the APK from the [latest release](https://github.com/rayane1817/momentum4-auto-off/releases/latest). Android only, no internet permission, open source. Play Protect will warn because it's not from the Play Store.
+2. Force-stop Smart Control first: only one app can talk to the headphones at a time.
+3. Open the app with the headphones connected to your phone. It links by itself.
+4. Tap **Device > Copy report** and paste it in a comment or in the [report form](https://github.com/rayane1817/momentum4-auto-off/issues/new/choose). The report has no Bluetooth addresses or personal data: only the phone model, Android version, headphone firmware, and the app's own log.
+5. Tap **Power off now** on the Home screen. They should switch fully off and stay off until you press the button.
+6. Turn them back on, switch on **Auto power-off** on the Home screen, leave the phone silent for the idle time, and see if they switch off.
+
+**Then tell me:**
+- Did Power off now switch them fully off?
+- With Auto power-off on, did they switch off after the idle time?
+- Did they ever switch off while you were wearing them? (Known tradeoff: wearing them in silence past the idle time switches them off.)
 
 **Especially useful:**
-- Firmware other than 3.38.3 (it's under Device in the app).
-- Pixel, OnePlus, Xiaomi, and Oppo phones, which kill background apps aggressively.
-- Other Sennheiser models (Momentum True Wireless 4, Accentum). Please only try **Power off**, nothing else, since the other commands are only mapped for the M4.
+- Firmware other than 3.38.3 (shown under Device in the app).
+- Pixel, OnePlus, Xiaomi, Oppo, and other phones that close background apps aggressively.
+- Other Sennheiser models (Momentum True Wireless 4, Accentum). Please only try **Power off now**, nothing else: the other settings are only mapped for the M4.
 
-**Also tell me:** which one feature you'd want next (one only, so I can count).
+**One more thing:** which ONE feature would you want next? One only, so I can count.
 
-Not affiliated with Sennheiser. If you'd rather not install anything, a comment with your firmware version, phone, and whether your M4 really switches off after 15 min helps too.
+Not affiliated with Sennheiser. If you'd rather not install anything, a comment with your firmware, your phone, and whether your M4 really switches off after 15 min helps too.
 
 ---
 
