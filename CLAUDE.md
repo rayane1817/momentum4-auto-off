@@ -22,6 +22,7 @@ Full history and test log T1-T42: `docs/history.md`. Read it only when a task ne
 
 ## Current state (1 Nov 2026)
 - Released: v0.14.0 (1 Nov 2026) = design v4 (`docs/design-spec-v4.md`: Nothing X home, Poweramp `EqFaders` + `EqGesture`, dot-matrix `EqCurve`, preset sheet, grouped rows + line icons `res/drawable/ic_*`, guard page + tile switch) on top of 0.13.0 (guard back-off, Copy report, issue form). Ryane chose to skip the laptop run: 0.12-0.14 have never run on a phone; the Reddit testers are the first.
+- Open PRs, stacked, merge in order: #37 = v0.14.1 (device picker, live guard state, release hash), #38 = v0.14.2 (auto-connect), then the audit-fixes PR = v0.14.3 (strict single-frame sends and raw input, PC sweep off by default, report name scrub, monotonic guard clock, Python CI, release guard). `release.yml` publishes the committed APK of the current `versionName`; run it once after the last merge. #36 = laptop run of v0.14.0 (T43-T57).
 - Next: Ryane posts `docs/reddit-post-v2.md`; about 7 days later ONE session turns all replies into `docs/community-reports.md`, ranks fixes, builds one release.
 - Open questions (only from community data or a planned capture): 0605 on other firmware and models; guard on aggressive battery-saver phones; meaning of `1405`, `1800`, `1407` (read-only, never probe).
 

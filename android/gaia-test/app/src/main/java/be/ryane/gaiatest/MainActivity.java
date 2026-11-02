@@ -1850,6 +1850,12 @@ public class MainActivity extends Activity {
     }
 
     private void send(byte[] frame) {
+        String bad = Gaia.singleFrameProblem(frame);          // exactly one complete frame, so blockedReason sees all of it
+        if (bad != null) {
+            append("BLOCKED (" + bad + "): " + Gaia.hex(frame));
+            toast("Not sent: " + bad + ". One complete frame at a time.");
+            return;
+        }
         String blocked = Gaia.blockedReason(frame);
         if (blocked != null) {
             append("BLOCKED (" + blocked + "): " + Gaia.hex(frame));
@@ -1983,8 +1989,15 @@ public class MainActivity extends Activity {
         refreshGuardTarget();
     }
 
+    /** Shared text must not carry a renamed headset's name (audit F-11): swap it for the safe label. */
+    @SuppressWarnings("MissingPermission")
+    private String scrubNames(String text) {
+        BluetoothDevice d = selectedDevice();
+        return Report.scrub(text, d == null ? null : nameOf(d), prefs.getString("devName", ""));
+    }
+
     private void copyLog() {
-        ((ClipboardManager) getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("log", Report.redact(log.getText().toString())));
+        ((ClipboardManager) getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("log", scrubNames(Report.redact(log.getText().toString()))));
         toast("Log copied");
     }
 
@@ -2005,8 +2018,8 @@ public class MainActivity extends Activity {
         r.append("Guard: ").append(AutoOffService.running ? "running" : "stopped")
                 .append(", idle time ").append(prefs.getInt("minutes", 15)).append(" min, autostart ")
                 .append(prefs.getBoolean("autostart", false) ? "on" : "off").append('\n');
-        r.append("\n-- guard log (last 40) --\n").append(Report.tail(AutoOffService.getLog(), 40));
-        r.append("\n\n-- app log (last 40) --\n").append(Report.tail(log.getText().toString(), 40)).append('\n');
+        r.append("\n-- guard log (last 40) --\n").append(scrubNames(Report.tail(AutoOffService.getLog(), 40)));
+        r.append("\n\n-- app log (last 40) --\n").append(scrubNames(Report.tail(log.getText().toString(), 40))).append('\n');
         ((ClipboardManager) getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("M4 report", r.toString()));
         toast("Report copied. Paste it in your comment or the report form.");
     }

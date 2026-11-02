@@ -2,6 +2,13 @@
 
 Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control channel (RFCOMM, UUID `a2129ff3-081b-4c45-8afe-469d9c4842ec`) and sends single commands. No internet permission, no libraries, Bluetooth only.
 
+## v0.14.3: safety and release fixes from an outside code audit
+- **Raw frame field:** it now takes exactly one complete frame. Typos in the hex are refused instead of dropped, and a second frame or stray bytes are refused, so a permitted frame can no longer carry a blocked one with it. Every send in the app passes the same check.
+- **Shared text:** Copy report and Copy log replace a renamed headset's name ("John's MOMENTUM 4") with "MOMENTUM (custom name hidden)". Only the stock name is shown.
+- **Guard:** idle time is measured with the monotonic clock, so a phone clock change can't shorten it and fire the power-off early.
+- The PC client's sweep is off by default; the `raw` command is strict like the app. Python tests and the blocklist parity test now run in CI, and a manual release run refuses a version that already has a release.
+- Same commands as v0.14.2 (sorted send/toggle diff); screens unchanged.
+
 ## v0.14.2: auto-connect
 - The app opens its link to the headphones by itself, like Smart Control: when you open it with the MOMENTUM 4 already connected to the phone, and when the headphones connect while the app is open (after about 2 s, up to 3 tries). The Connect button stays.
 - Headphones not on the phone: the status reads "Waiting for MOMENTUM 4" and the app connects when they come back.

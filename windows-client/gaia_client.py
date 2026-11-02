@@ -17,7 +17,7 @@ Commands:
     set-timer N SECONDS write timer N
     battery             read battery %
     raw HEX             send one raw frame, e.g. "FF 03 00 00 04 95 06 03"
-    sweep               scoped blind sweep for a power-off command (see --features)
+    sweep               DISABLED unless M4_ALLOW_SWEEP=1 (blind, undocumented commands; research only)
     snapshot --out F    send every documented GET once, save decoded values as JSON
     diff A.json B.json  print changed fields (volatile ones ignored); no headset needed
     check FILE.json     run documented-only SET/GET/restore steps (see run_check)
@@ -31,7 +31,6 @@ Common options:
 Examples:
     python gaia_client.py verify
     python gaia_client.py raw "FF 03 00 00 04 95 06 03"
-    python gaia_client.py sweep --features 3
 """
 
 import argparse
@@ -125,10 +124,35 @@ def hexstr(b):
 
 
 def parse_hex(text):
-    clean = "".join(c for c in text if c in "0123456789abcdefABCDEF")
-    if len(clean) % 2:
-        raise ValueError("odd number of hex digits")
-    return bytes(int(clean[i:i + 2], 16) for i in range(0, len(clean), 2))
+    """Hex bytes separated by spaces, commas or colons. Every token must be whole bytes; anything
+    else is an error instead of being silently dropped (audit F-10)."""
+    text = text.strip()
+    if not text:
+        return b""
+    out = bytearray()
+    for tok in re.split(r"[\s,:]+", text):
+        if not tok or len(tok) % 2 or not re.fullmatch(r"[0-9a-fA-F]+", tok):
+            raise ValueError("not whole hex bytes: %r" % tok)
+        out += bytes(int(tok[i:i + 2], 16) for i in range(0, len(tok), 2))
+    return bytes(out)
+
+
+def single_frame_problem(frame):
+    """None if frame is exactly one complete GAIA v3 frame (FF 03, length field matching, nothing
+    after it), else the reason. blocked_reason() only reads the first 8 bytes, so every send must
+    pass this first, or a permitted frame followed by a blocked one would go out together (F-01)."""
+    if not frame:
+        return "no bytes"
+    if len(frame) < 8:
+        return "shorter than a frame header"
+    if frame[0] != 0xFF or frame[1] != 0x03:
+        return "not a GAIA v3 frame (FF 03)"
+    want = 8 + ((frame[2] << 8) | frame[3])
+    if len(frame) < want:
+        return "frame cut short"
+    if len(frame) > want:
+        return "more than one frame"
+    return None
 
 # ----------------------------------------------------------- safety guard
 
@@ -317,7 +341,7 @@ class Link:
         return False
 
     def send(self, frame):
-        reason = blocked_reason(frame)
+        reason = single_frame_problem(frame) or blocked_reason(frame)
         if reason:
             self.log.tx(frame, blocked=reason)
             return False
@@ -431,6 +455,12 @@ SCOPE = {
 }
 
 
+def sweep_allowed(env=None):
+    """Blind sweeps send commands nobody has documented. Off unless M4_ALLOW_SWEEP=1 (audit F-02):
+    the one sweep that mattered is done (it found 0495:0605, docs/search-log.md)."""
+    return (os.environ if env is None else env).get("M4_ALLOW_SWEEP") == "1"
+
+
 def sweep(link, scope_key, start, end):
     targets = SCOPE[scope_key]
     link.log.note("sweep scope %s, request-cmd range 0x%02X..0x%02X" % (scope_key, start, end))
@@ -443,6 +473,9 @@ def sweep(link, scope_key, start, end):
             frame = build(vendor, cmd)
             if blocked_reason(frame):
                 link.log.note("skip excluded %04X:%04X" % (vendor, cmd))
+                continue
+            if vendor == SENNHEISER and cmd in M4.COMMANDS and not M4.COMMANDS[cmd]["pc_allowed"]:
+                link.log.note("skip %04X:%04X (%s): the command catalogue does not allow it from the PC" % (vendor, cmd, M4.COMMANDS[cmd]["name"]))
                 continue
             link.send(frame)
             frames = link.read_frames(1.0)
@@ -823,6 +856,11 @@ def main():
             for p in problems:
                 print("check file refused: %s" % p)
             return 2
+    if args.command == "sweep" and not sweep_allowed():
+        print("sweep is disabled: it sends undocumented commands (the project rule is no sweeps).\n"
+              "The power-off command is already known (0495:0605, via the Android app's guard).\n"
+              "Research only, at your own risk: set M4_ALLOW_SWEEP=1.")
+        return 2
     if args.command == "snapshot" and not args.out:
         print("snapshot needs --out FILE.json")
         return 2
@@ -882,7 +920,13 @@ def main():
             link.send(build(SENNHEISER, 0x0601, bytes([n])))
             link.read_frames(2.0)
         elif cmd == "raw":
-            link.send(parse_hex(" ".join(args.args)))
+            try:
+                frame = parse_hex(" ".join(args.args))
+            except ValueError as e:
+                log.note("raw refused: %s" % e)
+                return 2
+            if not link.send(frame):
+                return 2                       # blocked or not exactly one complete frame; nothing was sent
             link.read_frames(2.0)
         elif cmd == "sweep":
             lo, hi = (int(x, 0) for x in args.range.split(":"))

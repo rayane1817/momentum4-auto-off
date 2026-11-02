@@ -1,0 +1,43 @@
+name: Python checks
+
+# The PC client, the tools and the cross-client blocklist parity test. build.yml only builds the
+# Android app, so without this a change to gaia_client.py or to the blocklist in Gaia.java could
+# merge unchecked (audit F-08).
+
+on:
+  pull_request:
+    paths:
+      - 'windows-client/**'
+      - 'tools/**'
+      - 'android/gaia-test/app/src/main/java/be/ryane/gaiatest/Gaia.java'
+      - '.github/workflows/python.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'windows-client/**'
+      - 'tools/**'
+      - 'android/gaia-test/app/src/main/java/be/ryane/gaiatest/Gaia.java'
+      - '.github/workflows/python.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: PC client tests
+        run: python -m unittest discover -s windows-client -p "test_*.py" -v
+
+      - name: Tools tests
+        run: python -m unittest discover -s tools -p "test_*.py" -v
+
+      - name: Blocklist parity (app vs PC)
+        run: python tools/blocklist_parity_test.py

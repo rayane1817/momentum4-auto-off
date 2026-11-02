@@ -53,7 +53,8 @@ final class Remote {
         Context app = ctx.getApplicationContext();
         Handler main = new Handler(Looper.getMainLooper());
         for (byte[] fr : frames) {
-            String why = Gaia.blockedReason(fr);
+            String problem = Gaia.singleFrameProblem(fr);
+            final String why = problem != null ? problem : Gaia.blockedReason(fr);
             if (why != null) { main.post(() -> done.done(false, "blocked: " + why)); return; }
         }
         MainActivity live = MainActivity.live;

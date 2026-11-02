@@ -13,6 +13,7 @@ import android.content.Intent;
 import android.media.AudioManager;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.SystemClock;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -279,7 +280,9 @@ public class AutoOffService extends Service {
         return null;
     }
 
-    private static long now() { return System.currentTimeMillis(); }
+    /** Monotonic, so a clock change (time sync, manual set) can't shorten or stretch the idle time (audit F-09).
+     *  Counts deep sleep too. firedAt keeps the wall clock: it is only shown as HH:mm. */
+    private static long now() { return SystemClock.elapsedRealtime(); }
 
     private static void sleep(long ms) {
         try { Thread.sleep(ms); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }

@@ -26,9 +26,26 @@ final class Report {
         return redact(b.toString().trim());
     }
 
-    /** Device name only when it is a MOMENTUM; anything else may be a personal name. */
+    private static final Pattern STOCK_NAME = Pattern.compile("(?i)^MOMENTUM( 4)?( Wireless)?$");
+
+    /**
+     * Only the stock name goes into a report. A renamed headset ("Ryane's MOMENTUM 4") may hold a
+     * personal name, and reports get pasted in public (audit F-11), so it is replaced.
+     */
     static String safeName(String name) {
         if (name == null || name.isEmpty()) return "(none)";
-        return name.toUpperCase(java.util.Locale.ROOT).contains("MOMENTUM") ? name : "(not a MOMENTUM)";
+        if (STOCK_NAME.matcher(name.trim()).matches()) return name.trim();
+        return name.toUpperCase(java.util.Locale.ROOT).contains("MOMENTUM") ? "MOMENTUM (custom name hidden)" : "(not a MOMENTUM)";
+    }
+
+    /** Replaces each given device name wherever it appears in text with its safe label. Longest name first. */
+    static String scrub(String text, String... names) {
+        if (text == null) return "";
+        java.util.List<String> list = new java.util.ArrayList<>();
+        for (String n : names) if (n != null && n.trim().length() >= 2 && !list.contains(n.trim())) list.add(n.trim());
+        list.sort((a, b) -> b.length() - a.length());
+        String out = text;
+        for (String n : list) out = out.replace(n, safeName(n));
+        return out;
     }
 }

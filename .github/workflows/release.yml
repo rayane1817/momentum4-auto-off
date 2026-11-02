@@ -10,13 +10,19 @@ name: Release APK
 #     "Release APK" > Run workflow.
 # The tag is derived from versionName in android/gaia-test/app/build.gradle,
 # so bump that before cutting a release. A pushed tag must equal v<versionName>,
-# and the unit tests must pass, or nothing is published.
+# the unit tests (Android and Python) must pass, and a manual run refuses a version that
+# already has a release, or nothing is published.
 
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      allow_existing:
+        description: 'Re-publish a version that already has a release (normally never: bump versionName instead)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -51,10 +57,27 @@ jobs:
             exit 1
           fi
 
+      - name: Refuse to re-publish an existing version
+        if: github.event_name == 'workflow_dispatch' && inputs.allow_existing != true
+        run: |
+          ver=$(grep -oP "versionName '\K[^']+" app/build.gradle)
+          if git ls-remote --exit-code --tags origin "refs/tags/v${ver}" >/dev/null 2>&1; then
+            echo "v${ver} already has a release. Bump versionName and versionCode, commit the new APK and its SHA256SUMS line, then run again." >&2
+            echo "(To re-publish on purpose, run with allow_existing = true.)" >&2
+            exit 1
+          fi
+
       - name: Unit tests
         run: |
           chmod +x ./gradlew
           ./gradlew testReleaseUnitTest --no-daemon
+
+      - name: Python safety tests (PC client, tools, blocklist parity)
+        working-directory: ${{ github.workspace }}
+        run: |
+          python3 -m unittest discover -s windows-client -p "test_*.py"
+          python3 -m unittest discover -s tools -p "test_*.py"
+          python3 tools/blocklist_parity_test.py
 
       - name: Take the committed APK, checked against SHA256SUMS
         id: ver
