@@ -17,7 +17,7 @@ It works on my M4 (fw 3.38.3) with a Galaxy Z Flip6 and a Nokia XR20. Before I c
 
 **How to test (about 5 min):**
 1. Install the APK from the [latest release](https://github.com/rayane1817/momentum4-auto-off/releases/latest). Android only, no internet permission, open source. Play Protect will warn because it's not from the Play Store.
-2. Force-stop Smart Control first: only one app can talk to the headphones at a time.
+2. Force-stop Sennheiser Smart Control Plus first: only one app can talk to the headphones at a time.
 3. Open the app with the headphones connected to your phone. It links by itself.
 4. Tap **Device > Copy report** and paste it in a comment or in the [report form](https://github.com/rayane1817/momentum4-auto-off/issues/new/choose). The report has no Bluetooth addresses or personal data: only the phone model, Android version, headphone firmware, and the app's own log.
 5. Tap **Power off now** on the Home screen. They should switch fully off and stay off until you press the button.
