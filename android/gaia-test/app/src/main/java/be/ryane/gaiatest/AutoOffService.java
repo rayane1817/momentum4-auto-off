@@ -41,6 +41,8 @@ public class AutoOffService extends Service {
     static final String CHANNEL = "autooff";
     static final String EXTRA_ADDR = "addr";
     static final String EXTRA_TIMEOUT_MS = "timeout_ms";
+    /** App-private broadcast when running / firedAt / lastSendFailed change, so an open MainActivity redraws (T53). */
+    static final String ACTION_STATE = "be.ryane.gaiatest.GUARD_STATE";
     private static final int NOTIF_ID = 1;
     private static final long POLL_MS = 15_000;
 
@@ -77,6 +79,9 @@ public class AutoOffService extends Service {
         }
         running = true;
         stop = false;
+        firedAt = 0;              // a new guard: an old "Power-off sent" no longer applies
+        lastSendFailed = false;
+        announce();
         new Thread(() -> run(addr, timeout)).start();
         return START_STICKY;
     }
@@ -93,7 +98,10 @@ public class AutoOffService extends Service {
                 int mode = am == null ? AudioManager.MODE_NORMAL : am.getMode();
                 boolean inCall = mode != AudioManager.MODE_NORMAL;
                 boolean inUse = music || inCall;
-                if (inUse) { lastInUse = now(); failures = 0; nextTry = 0; lastSendFailed = false; }
+                if (inUse) {
+                    lastInUse = now(); failures = 0; nextTry = 0;
+                    if (lastSendFailed) { lastSendFailed = false; announce(); }
+                }
                 long idleMs = now() - lastInUse;
 
                 String s = String.format(Locale.ROOT, "music=%s call=%s idle=%dm%02ds",
@@ -112,6 +120,7 @@ public class AutoOffService extends Service {
                         log("power-off sent OK (0605)");
                     } else {
                         lastSendFailed = true;
+                        announce();
                         failures++;
                         long wait = GuardRetry.delayMs(failures);
                         nextTry = now() + wait;
@@ -130,6 +139,7 @@ public class AutoOffService extends Service {
             log("guard crashed: " + t);
         } finally {
             if (!stop) running = false;   // when stopped, onDestroy already cleared it; a newer guard may be running now
+            announce();                   // after firedAt and running are final: the page shows "Sent"
             stopForeground(true);
             stopSelf();
             log("guard stopped");
@@ -234,6 +244,12 @@ public class AutoOffService extends Service {
                 .build();
     }
 
+    /** Tell the app the guard state changed. Package-only: no other app receives it. */
+    private void announce() {
+        try { sendBroadcast(new Intent(ACTION_STATE).setPackage(getPackageName())); }
+        catch (RuntimeException ignored) {}   // never let the UI hint break the guard
+    }
+
     static void start(Context ctx, String addr, long timeoutMs) {
         Intent i = new Intent(ctx, AutoOffService.class);
         i.putExtra(EXTRA_ADDR, addr);
@@ -254,6 +270,7 @@ public class AutoOffService extends Service {
     public void onDestroy() {
         stop = true;
         running = false;
+        announce();
         super.onDestroy();
     }
 

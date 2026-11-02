@@ -2,6 +2,12 @@
 
 Tiny test tool for the MOMENTUM 4. It connects to the headset's GAIA control channel (RFCOMM, UUID `a2129ff3-081b-4c45-8afe-469d9c4842ec`) and sends single commands. No internet permission, no libraries, Bluetooth only.
 
+## v0.14.1: fixes from the v0.14.0 laptop run
+- Device page: the headphones picker shows the chosen name again ("MOMENTUM 4 · Tap to choose another paired device"); tapping it opens the list of paired devices (T50).
+- Auto power-off: when the guard sends the power-off and stops, the page and the Home tile switch to "Sent" right away, without reopening the app (T53).
+- The GitHub release now ships the same APK file as `release/`, so its SHA-256 matches `SHA256SUMS` (T43).
+- Same commands as v0.14.0.
+
 ## v0.14.0: design v4 (docs/design-spec-v4.md)
 - Home in the Nothing X style: battery in dot numbers, the headphones' name, a noise card with three round buttons, two-column tiles (Equaliser, Listening, Auto power-off with an on/off switch, Device), and a "Power off now" row. The cog opens Device.
 - Equaliser: five vertical faders in the Poweramp style. Drag one, or sweep across several to draw a curve; double-tap a fader to reset it to 0. A dot-matrix curve sits under them. Presets open from the name pill as a list with small curve pictures.

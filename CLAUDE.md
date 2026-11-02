@@ -29,7 +29,7 @@ Full history and test log T1-T42: `docs/history.md`. Read it only when a task ne
 - App: `android/gaia-test/` (pure Java, no libs, minSdk 26, targetSdk 35). `MainActivity` (UI + link; pages Home/Equaliser/Listening/Device/Auto power-off), `EqFaders` (vertical faders), `AutoOffService` (guard), `Gaia` (framing, decode, blocklist), `Remote` + `Widgets` + `*Tile` (one-shot sends), `Presets`, `EqSync`, `Watchdog`, `Tok` + `res/values(-night)/colors.xml` (all colours). JVM tests in `app/src/test`.
 - PC client: `windows-client/gaia_client.py` (snapshot / diff / check; `--addr` or `M4_ADDR`). Tools in `tools/`.
 - Specs: `docs/command-map.md` (every command), `docs/protocol.md`, `docs/config-spec.md`, `docs/design-spec-v3.md`, `docs/design-spec-v4.md` (current design, built in v0.14.0).
-- Releases: bump `versionCode`/`versionName` in `app/build.gradle`, copy the APK to `android/gaia-test/release/` + `SHA256SUMS`, merge, then run `release.yml` on main (tests first; tag must equal v<versionName>). Signing key is public on purpose (`keystore/`).
+- Releases: bump `versionCode`/`versionName` in `app/build.gradle`, copy the APK to `android/gaia-test/release/` + `SHA256SUMS`, merge, then run `release.yml` on main (tests first; tag must equal v<versionName>). `release.yml` publishes the committed APK after checking its `SHA256SUMS` line; it never uploads a CI rebuild (T43). Signing key is public on purpose (`keystore/`).
 
 ## How to work (token budget)
 - One task per session. Read only the files the task names; don't load `docs/history.md` or big specs unless needed.
