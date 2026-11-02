@@ -27,14 +27,12 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
-import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -58,7 +56,8 @@ public class MainActivity extends Activity {
     private final List<View> gated = new ArrayList<>();            // disabled when not connected
     private final ExecutorService sender = Executors.newSingleThreadExecutor();
 
-    private Spinner deviceSpinner;
+    private int deviceIndex = -1;                                    // index into devices, -1 = none
+    private TextView deviceTitle;
     private TextView statusLine, statusDetail, noiseHint, guardUnit, heroName;
     private TextView tileSound, tileListen, tileDevice, tileGuardSub;
     private DotNumerals batteryDots, guardDots;
@@ -103,6 +102,12 @@ public class MainActivity extends Activity {
         }
     };
 
+    // T53: the guard sends 0605 and stops itself while the app is open; redraw the page and tile then.
+    private final BroadcastReceiver guardReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context ctx, Intent intent) { applyGuardState(); }
+    };
+
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -145,11 +150,15 @@ public class MainActivity extends Activity {
         f.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
         f.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
         registerReceiver(btReceiver, f);
+        IntentFilter gf = new IntentFilter(AutoOffService.ACTION_STATE);
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(guardReceiver, gf, Context.RECEIVER_NOT_EXPORTED);
+        else registerReceiver(guardReceiver, gf);
     }
 
     @Override
     protected void onStop() {
         try { unregisterReceiver(btReceiver); } catch (IllegalArgumentException ignored) {}
+        try { unregisterReceiver(guardReceiver); } catch (IllegalArgumentException ignored) {}
         super.onStop();
     }
 
@@ -572,19 +581,26 @@ public class MainActivity extends Activity {
         tileDevice.setText((modelText == null ? "MOMENTUM 4" : modelText) + (hwText == null ? "" : " · hw " + hwText));
     }
 
-    /** Guard tile subtitle and icon: copper "Armed · 15 min" while running. */
+    /** Guard tile subtitle and icon: copper "Armed · 15 min" while running, "Sent · 14:05" after it fired. */
     private void refreshGuardSummary() {
         if (tileGuardSub == null) return;
-        boolean on = AutoOffService.running;
-        tileGuardSub.setText(on ? "Armed · " + prefs.getInt("minutes", 15) + " min" : "Off");
-        tileGuardSub.setTextColor(on ? T.copper : T.ink2);
-        if (guardIcon != null) guardIcon.setImageTintList(ColorStateList.valueOf(on ? T.copper : T.ink2));
+        GuardState g = guardState();
+        tileGuardSub.setText(g.tile);
+        tileGuardSub.setTextColor(g.on ? T.copper : T.ink2);
+        if (guardIcon != null) guardIcon.setImageTintList(ColorStateList.valueOf(g.on ? T.copper : T.ink2));
+    }
+
+    private GuardState guardState() {
+        long fired = AutoOffService.firedAt;
+        return GuardState.of(AutoOffService.running, fired, AutoOffService.lastSendFailed, prefs.getInt("minutes", 15),
+                fired > 0 ? new SimpleDateFormat("HH:mm", Locale.ROOT).format(new Date(fired)) : "");
     }
 
     @SuppressWarnings("MissingPermission")
     private void showDeviceName() {
         BluetoothDevice d = selectedDevice();
         curName = d == null ? "MOMENTUM 4" : (d.getName() == null ? d.getAddress() : d.getName());
+        if (deviceTitle != null) deviceTitle.setText(DevicePick.rowTitle(d == null ? null : nameOf(d), devices.size()));
         renderStatus();
         refreshGuardTarget();
     }
@@ -592,7 +608,7 @@ public class MainActivity extends Activity {
     @SuppressWarnings("MissingPermission")
     private static String nameOf(BluetoothDevice d) { return d.getName() == null ? d.getAddress() : d.getName(); }
 
-    private static boolean isMomentum(BluetoothDevice d) { return nameOf(d).toUpperCase(Locale.ROOT).contains("MOMENTUM"); }
+    private static boolean isMomentum(BluetoothDevice d) { return DevicePick.looksLikeMomentum(nameOf(d)); }
 
     /** Which device the guard, widgets and tiles act on (T35: a stale saved TV caused silent failures). */
     private void refreshGuardTarget() {
@@ -640,26 +656,11 @@ public class MainActivity extends Activity {
         LinearLayout c = subPage("Device", refresh, true);
 
         LinearLayout hp = group(c, "Headphones");
-        LinearLayout pick = new LinearLayout(this);
-        pick.setGravity(Gravity.CENTER_VERTICAL);
-        pick.setMinimumHeight(dp(64));
-        pick.setPadding(dp(16), dp(6), dp(8), dp(6));
-        ImageView hi = icon(R.drawable.ic_headphones, T.ink2, 18);
-        ((LinearLayout.LayoutParams) hi.getLayoutParams()).rightMargin = dp(6);
-        pick.addView(hi);
-        LinearLayout pt = new LinearLayout(this);
-        pt.setOrientation(LinearLayout.VERTICAL);
-        deviceSpinner = new Spinner(this);
-        deviceSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            public void onItemSelected(android.widget.AdapterView<?> p, View v, int pos, long id) { showDeviceName(); }
-            public void onNothingSelected(android.widget.AdapterView<?> p) { showDeviceName(); }
-        });
-        pt.addView(deviceSpinner);
-        TextView ps = caption("Tap to choose another paired device");
-        ps.setPadding(dp(8), 0, 0, 0);
-        pt.addView(ps);
-        pick.addView(pt, new LinearLayout.LayoutParams(0, -2, 1f));
-        hp.addView(pick);
+        // T50: the closed Spinner drew blank on the Flip6 (no selected-item view). A plain row with
+        // the chosen name, the caption and a chevron, opening a single-choice list, cannot go blank.
+        LinearLayout pick = navRow(hp, R.drawable.ic_headphones, "MOMENTUM 4", "Tap to choose another paired device",
+                v -> chooseDevice());
+        deviceTitle = (TextView) ((LinearLayout) pick.getChildAt(1)).getChildAt(0);
         navRow(hp, R.drawable.ic_refresh, "Rescan", "Look again for paired headphones", v -> rescan());
         shapeGroup(hp);
 
@@ -1550,19 +1551,16 @@ public class MainActivity extends Activity {
         BluetoothDevice current = selectedDevice();
         String keep = current != null ? current.getAddress() : prefs.getString("dev", "");
         devices.clear();
-        List<String> names = new ArrayList<>();
-        int preselect = 0;
+        List<String> names = new ArrayList<>(), addrs = new ArrayList<>();
         boolean sawMomentum = false;
         for (BluetoothDevice d : adapter.getBondedDevices()) {
-            String name = d.getName() == null ? d.getAddress() : d.getName();
-            boolean isM4 = name.toUpperCase(Locale.ROOT).contains("MOMENTUM");
-            if (isM4) sawMomentum = true;
-            if (d.getAddress().equals(keep) || (keep.isEmpty() && isM4)) preselect = devices.size();
+            String name = nameOf(d);
+            if (DevicePick.looksLikeMomentum(name)) sawMomentum = true;
             devices.add(d);
             names.add(name);
+            addrs.add(d.getAddress());
         }
-        deviceSpinner.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, names));
-        if (!devices.isEmpty()) deviceSpinner.setSelection(preselect);
+        deviceIndex = DevicePick.preselect(addrs, names, keep);
         showDeviceName();
         if (socket == null && !connecting) {
             if (devices.isEmpty()) setStatus(0, "No paired headphones. Pair them in Android Settings > Bluetooth, then tap Rescan.");
@@ -1578,8 +1576,24 @@ public class MainActivity extends Activity {
     }
 
     private BluetoothDevice selectedDevice() {
-        int i = deviceSpinner.getSelectedItemPosition();
+        int i = deviceIndex;
         return (i >= 0 && i < devices.size()) ? devices.get(i) : null;
+    }
+
+    /** The picker's list: paired devices, the current one checked. Picking only changes the target. */
+    private void chooseDevice() {
+        if (devices.isEmpty()) { rescan(); return; }
+        String[] names = new String[devices.size()];
+        for (int i = 0; i < names.length; i++) names[i] = nameOf(devices.get(i));
+        new AlertDialog.Builder(this, R.style.AlertTheme)
+                .setTitle("Headphones")
+                .setSingleChoiceItems(names, deviceIndex, (d, which) -> {
+                    deviceIndex = which;
+                    showDeviceName();
+                    d.dismiss();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     @SuppressWarnings("MissingPermission")
@@ -1767,7 +1781,6 @@ public class MainActivity extends Activity {
     private void applyGuardState() {
         if (guardButton == null) return;
         boolean on = AutoOffService.running;
-        int min = prefs.getInt("minutes", 15);
         guardButton.setText(on ? "Stop guard" : "Start guard");
         if (on) styleSunk(guardButton); else styleFilled(guardButton);
         if (guardSwitch != null && guardSwitch.isChecked() != on && System.currentTimeMillis() >= guardPendingUntil) {
@@ -1775,21 +1788,12 @@ public class MainActivity extends Activity {
             guardSwitch.setChecked(on);
             guardApplying = false;
         }
-        long fired = AutoOffService.firedAt;
-        boolean justFired = !on && fired > 0;
-        guardDots.set(on ? String.valueOf(min) : justFired ? "SENT" : "OFF", on,
-                on ? "Guard on, " + min + " minutes idle" : justFired ? "Power-off sent" : "Guard off");
-        guardUnit.setText(on ? "minutes idle, then fully off" : justFired ? "power-off sent" : "the guard is off");
+        GuardState g = guardState();
+        guardDots.set(g.dots, g.on, g.dotsDesc);
+        guardUnit.setText(g.unit);
         refreshGuardSummary();
-        if (on && AutoOffService.lastSendFailed) {
-            guardStatus.setText("Couldn't reach the headphones. They may be off already; the guard tries again later.");
-            guardStatus.setTextColor(T.danger);
-        } else {
-            guardStatus.setTextColor(T.ink2);
-            guardStatus.setText(on ? "Armed. Off after " + min + " min with nothing playing and no call."
-                    : justFired ? "Power-off sent at " + new SimpleDateFormat("HH:mm", Locale.ROOT).format(new Date(fired)) + ". Wake them with the button."
-                    : "The guard is not running.");
-        }
+        guardStatus.setText(g.status);
+        guardStatus.setTextColor(g.failed ? T.danger : T.ink2);
         refreshGuardTarget();
     }
 

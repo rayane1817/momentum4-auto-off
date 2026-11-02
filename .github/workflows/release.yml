@@ -1,6 +1,9 @@
 name: Release APK
 
-# Builds the Android app and publishes the APK to the Releases tab.
+# Runs the unit tests and publishes the COMMITTED APK (android/gaia-test/release/) to the Releases tab.
+# It does not upload a CI rebuild: builds are not byte-identical across machines, so a rebuilt
+# asset never matched release/SHA256SUMS (T43, 0.12.0-0.14.0). Now repo APK, SHA256SUMS and the
+# release asset are the same file. The APK must be committed with its SHA256SUMS line first.
 # Two ways to cut a release, both create a Release tagged v<versionName>:
 #   - push a version tag:  git tag v0.6 && git push origin v0.6
 #   - or, once this file is on the default branch, Actions tab >
@@ -48,19 +51,25 @@ jobs:
             exit 1
           fi
 
-      - name: Unit tests, then build release APK
+      - name: Unit tests
         run: |
           chmod +x ./gradlew
-          ./gradlew testReleaseUnitTest assembleRelease --no-daemon
+          ./gradlew testReleaseUnitTest --no-daemon
 
-      - name: Name the APK after the version
+      - name: Take the committed APK, checked against SHA256SUMS
         id: ver
         run: |
-          mkdir -p "${GITHUB_WORKSPACE}/dist"
           ver=$(grep -oP "versionName '\K[^']+" app/build.gradle)
           echo "ver=$ver" >> "$GITHUB_OUTPUT"
-          cp app/build/outputs/apk/release/app-release.apk \
-             "${GITHUB_WORKSPACE}/dist/m4-gaia-test-${ver}.apk"
+          apk="m4-gaia-test-${ver}.apk"
+          line=$(grep -E "  ${apk//./\\.}\$" release/SHA256SUMS || true)
+          if [ ! -f "release/${apk}" ] || [ -z "$line" ]; then
+            echo "release/${apk} or its SHA256SUMS line is missing. Commit both before releasing." >&2
+            exit 1
+          fi
+          (cd release && echo "$line" | sha256sum -c -)
+          mkdir -p "${GITHUB_WORKSPACE}/dist"
+          cp "release/${apk}" "${GITHUB_WORKSPACE}/dist/${apk}"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
