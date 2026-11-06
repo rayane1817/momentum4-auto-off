@@ -1,6 +1,6 @@
 ## Windows tray app
 
-The optional desktop app keeps a small control window one click away from the Windows notification area. It uses the existing GAIA client for Bluetooth and works on Windows 10 or later.
+The desktop app keeps a compact control window one click away from the Windows notification area. Its two primary circular controls match the Android Quick Settings behavior: click EQ to cycle through Neutral, Rock, Pop, Dance, Hip-Hop, Classical, Movie, and Jazz; click Noise to cycle Adaptive, Custom, and Off. It also shows battery and auto power-off status, lets you change the timer, and has a confirmed power-off action. The EQ and noise labels reflect the last successful setting sent by this PC. Custom EQ curves stored in the Android app are not synced to Windows. It uses the existing GAIA transport and works on Windows 10 or later.
 
 ### Install and run
 
@@ -13,11 +13,22 @@ The optional desktop app keeps a small control window one click away from the Wi
    run-client.bat
    ```
 
-4. In the app, enter the headset's Bluetooth address and select **Save**. Find it under Windows Settings > Bluetooth > the headphones > Properties. The address is saved locally in `%LOCALAPPDATA%\\Momentum4Companion\\settings.json`.
+4. In the app, enter the headset's Bluetooth address and select **Save**. Find it under Windows Settings > Bluetooth > the headphones > Properties. The address and last EQ/noise selections are saved locally in `%LOCALAPPDATA%\Momentum4Companion\settings.json`.
 
 The tray popup can read the battery and auto power-off timer, set the timer to Never / 15 / 30 / 60 minutes, or send the confirmed **Power off headphones** action. Power off turns off Bluetooth; press the physical headphone button to wake them. The app asks for confirmation first.
 
-Close the popup to leave it running in the tray. Use the tray menu's **Exit** command to quit. Logs are kept under `%LOCALAPPDATA%\\Momentum4Companion\\logs` because the existing CLI log includes the Bluetooth address.
+Close the popup to leave it running in the tray. Use the tray menu's **Exit** command to quit. Logs are kept under `%LOCALAPPDATA%\Momentum4Companion\logs` because the existing GAIA log includes the Bluetooth address.
+
+### Build a standalone EXE
+
+On Windows, install the build dependencies and run `build-exe.bat` from this folder:
+
+```bat
+py -3 -m pip install -r requirements-build.txt
+build-exe.bat
+```
+
+This creates `dist\Momentum4Companion.exe`. The EXE includes Python and the tray dependencies, so end users do not need a Python installation.
 
 # MOMENTUM 4 GAIA client (PC)
 
@@ -73,3 +84,4 @@ It finds the GAIA channel by its service UUID (Windows) or by SDP (pybluez). It 
 ## Windows notes
 - Stock Windows Python has no `socket.AF_BLUETOOTH`, so on Windows the client opens RFCOMM through the Microsoft Bluetooth stack (WinSock `AF_BTH`) with ctypes. It connects by the GAIA service UUID and lets Windows find the channel by SDP; `--channel` is the only way to force a raw channel number. No packages needed (`pybluez2` does not install on Python 3.12 anyway).
 - If Windows keeps auto-reconnecting the audio profile and the control channel won't open, unpair the headset from any other nearby device first.
+
