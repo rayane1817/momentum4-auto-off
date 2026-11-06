@@ -106,7 +106,8 @@ class TrayClient:
         line.pack(fill="x")
         self._value_card(line, "BATTERY", self.battery, "%")
         self._value_card(line, "AUTO POWER-OFF", self.timer_status, "")
-        self._button(body, "Refresh status", self.refresh, primary=True).pack(fill="x")
+        self.refresh_button = self._button(body, "Refresh status", self.refresh, primary=True)
+        self.refresh_button.pack(fill="x")
 
         tk.Label(body, text="AUTO POWER-OFF TIMER", fg="#8492a3", bg="#111821",
                  font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(18, 7))
@@ -248,7 +249,7 @@ class TrayClient:
             return
         self.busy = True
         self.status.set(message)
-        for widget in (self.apply_button, self.power_button):
+        for widget in (self.refresh_button, self.apply_button, self.power_button):
             widget.configure(state="disabled")
 
         def runner() -> None:
@@ -261,7 +262,7 @@ class TrayClient:
 
         def finish(result, error) -> None:
             self.busy = False
-            for widget in (self.apply_button, self.power_button):
+            for widget in (self.refresh_button, self.apply_button, self.power_button):
                 widget.configure(state="normal")
             done(result, error)
 
@@ -275,7 +276,7 @@ class TrayClient:
 
         def done(output, error):
             if error:
-                self.status.set(error)
+                self.status.set(self._short_error(error))
                 return
             battery_match = re.search(r"battery\s+(\d+)\s*%", output, re.IGNORECASE)
             timer_match = re.search(r"auto power-off\s*=\s*(\d+)\s*s", output, re.IGNORECASE)
@@ -305,7 +306,7 @@ class TrayClient:
 
         def done(output, error):
             if error:
-                self.status.set(error)
+                self.status.set(self._short_error(error))
                 return
             match = re.search(r"auto power-off\s*=\s*(\d+)\s*s", output, re.IGNORECASE)
             self.timer_status.set("Never" if seconds == 0 else f"{seconds // 60} min")
@@ -330,11 +331,22 @@ class TrayClient:
             return "\n".join(self._command("raw", "FF 03 00 00 04 95 06 05"))
 
         def done(_output, error):
-            self.status.set(error if error else "Power-off command sent. Press the headphone button to wake them.")
+            self.status.set(self._short_error(error) if error else
+                            "Power-off command sent. Press the headphone button to wake them.")
             if not error:
                 self.battery.set("--")
 
         self._background("Sending the power-off command…", work, done)
+
+    @staticmethod
+    def _short_error(error: str) -> str:
+        lines = [line.strip() for line in error.splitlines() if line.strip()]
+        useful = [line for line in lines if any(word in line.lower() for word in
+                  ("no headset address", "could not connect", "connect failed", "error", "refused", "timed out"))]
+        message = "\n".join((useful or lines)[-3:]) or "The command failed. Check the private log for details."
+        if len(message) > 360:
+            message = message[:357].rstrip() + "..."
+        return message
 
 
 def main() -> None:
