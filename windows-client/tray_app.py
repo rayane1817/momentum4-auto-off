@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Small Windows tray client for the MOMENTUM 4 GAIA command-line client."""
+"""Windows tray client for the MOMENTUM 4 GAIA client."""
 
 from __future__ import annotations
 
 import json
 import os
 import re
-import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -16,30 +16,50 @@ from tkinter import messagebox, ttk
 import pystray
 from PIL import Image, ImageDraw
 
+import gaia_client as Gaia
+
 
 APP_NAME = "Momentum 4 Companion"
-HERE = Path(__file__).resolve().parent
-CLI = HERE / "gaia_client.py"
 APP_DATA = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Momentum4Companion"
 SETTINGS = APP_DATA / "settings.json"
 LOGS = APP_DATA / "logs"
-TIMER_OPTIONS = (("Never", 0), ("15 minutes", 900), ("30 minutes", 1800), ("60 minutes", 3600))
 ADDRESS_RE = re.compile(r"^(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
+
+# dB x 10 for bands 63 Hz, 250 Hz, 1 kHz, 4 kHz, 8 kHz. These are the
+# Android companion's verified Smart Control presets, in its cycle order.
+EQ_PRESETS = (
+    ("Neutral", (0, 0, 0, 0, 0)),
+    ("Rock", (0, 20, 25, 15, -20)),
+    ("Pop", (0, -25, 0, 25, 0)),
+    ("Dance", (35, 20, -15, 15, 30)),
+    ("Hip-Hop", (30, 15, -15, 0, -15)),
+    ("Classical", (-20, -15, 0, 35, 40)),
+    ("Movie", (0, 0, 20, 20, -20)),
+    ("Jazz", (-32, 0, 22, 22, 0)),
+)
+NOISE_MODES = ("Adaptive", "Custom", "Off")
+TIMER_OPTIONS = (("Never", 0), ("15 minutes", 900), ("30 minutes", 1800), ("60 minutes", 3600))
 
 
 def load_settings() -> dict:
     try:
         with SETTINGS.open("r", encoding="utf-8") as stream:
-            settings = json.load(stream)
-        return settings if isinstance(settings, dict) else {}
+            values = json.load(stream)
+        if not isinstance(values, dict):
+            return {}
     except (OSError, json.JSONDecodeError):
         return {}
+    return values
 
 
-def save_settings(address: str) -> None:
+def save_settings(address: str, eq_index: int, noise_mode: int) -> None:
     APP_DATA.mkdir(parents=True, exist_ok=True)
     temporary = SETTINGS.with_suffix(".tmp")
-    temporary.write_text(json.dumps({"address": address}, indent=2), encoding="utf-8")
+    temporary.write_text(json.dumps({
+        "address": address,
+        "eq_index": eq_index,
+        "noise_mode": noise_mode,
+    }, indent=2), encoding="utf-8")
     temporary.replace(SETTINGS)
 
 
@@ -60,22 +80,35 @@ class TrayClient:
         self.root.title(APP_NAME)
         self.root.configure(bg="#111821")
         self.root.resizable(False, False)
+        self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
         self.root.protocol("WM_DELETE_WINDOW", self.hide)
         self.busy = False
         self.closing = False
         self._drag = None
 
-        self.settings = load_settings()
-        self.address = tk.StringVar(value=self.settings.get("address", ""))
-        self.timer = tk.StringVar(value="15 minutes")
+        settings = load_settings()
+        self.address = tk.StringVar(value=str(settings.get("address", "")))
+        self.eq_index = self._valid_index(settings.get("eq_index"), len(EQ_PRESETS))
+        self.noise_mode = self._valid_index(settings.get("noise_mode"), len(NOISE_MODES))
         self.status = tk.StringVar(value="Pair your headphones with Windows, then refresh.")
         self.battery = tk.StringVar(value="--")
         self.timer_status = tk.StringVar(value="--")
+        self.eq_label = tk.StringVar()
+        self.noise_label = tk.StringVar()
 
         self._build_window()
+        self._draw_quick_controls()
         self._build_tray()
         self.show()
+
+    @staticmethod
+    def _valid_index(value, count: int) -> int:
+        try:
+            index = int(value)
+        except (TypeError, ValueError):
+            return -1
+        return index if 0 <= index < count else -1
 
     def _build_window(self) -> None:
         outer = tk.Frame(self.root, bg="#111821", highlightbackground="#354354", highlightthickness=1)
@@ -95,13 +128,26 @@ class TrayClient:
         close.pack(side="right")
         close.bind("<Button-1>", lambda _event: self.hide())
 
-        body = tk.Frame(outer, bg="#111821", padx=18, pady=16)
+        body = tk.Frame(outer, bg="#111821", padx=18, pady=14)
         body.pack(fill="both", expand=True)
+
+        tk.Label(body, text="QUICK CONTROLS", fg="#8492a3", bg="#111821",
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w")
+        tiles = tk.Frame(body, bg="#111821")
+        tiles.pack(fill="x", pady=(8, 12))
+        self.eq_tile = self._quick_tile(tiles, "EQ", self.eq_label, self.cycle_eq)
+        self.eq_tile.pack(side="left", expand=True, fill="x", padx=(0, 7))
+        self.noise_tile = self._quick_tile(tiles, "ANC", self.noise_label, self.cycle_noise)
+        self.noise_tile.pack(side="left", expand=True, fill="x", padx=(7, 0))
+
+        tk.Label(body, text="Click a circle to cycle. The saved labels show the last mode set by this PC.",
+                 fg="#8492a3", bg="#111821", wraplength=330, justify="left",
+                 font=("Segoe UI", 8)).pack(anchor="w", pady=(0, 15))
 
         tk.Label(body, text="HEADPHONE STATUS", fg="#8492a3", bg="#111821",
                  font=("Segoe UI", 8, "bold")).pack(anchor="w")
-        status_card = tk.Frame(body, bg="#1b2633", padx=14, pady=12)
-        status_card.pack(fill="x", pady=(8, 14))
+        status_card = tk.Frame(body, bg="#1b2633", padx=14, pady=10)
+        status_card.pack(fill="x", pady=(7, 9))
         line = tk.Frame(status_card, bg="#1b2633")
         line.pack(fill="x")
         self._value_card(line, "BATTERY", self.battery, "%")
@@ -110,35 +156,65 @@ class TrayClient:
         self.refresh_button.pack(fill="x")
 
         tk.Label(body, text="AUTO POWER-OFF TIMER", fg="#8492a3", bg="#111821",
-                 font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(18, 7))
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(14, 6))
         timer_row = tk.Frame(body, bg="#111821")
         timer_row.pack(fill="x")
+        self.timer = tk.StringVar(value="15 minutes")
         self.timer_combo = ttk.Combobox(timer_row, textvariable=self.timer, state="readonly",
                                         values=[label for label, _seconds in TIMER_OPTIONS], width=18)
-        self.timer_combo.pack(side="left", fill="x", expand=True, ipady=5)
+        self.timer_combo.pack(side="left", fill="x", expand=True, ipady=4)
         self.apply_button = self._button(timer_row, "Apply", self.apply_timer, primary=True)
         self.apply_button.pack(side="left", padx=(9, 0))
 
         tk.Label(body, text="BLUETOOTH ADDRESS", fg="#8492a3", bg="#111821",
-                 font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(17, 7))
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(13, 6))
         address_row = tk.Frame(body, bg="#111821")
         address_row.pack(fill="x")
         self.address_entry = tk.Entry(address_row, textvariable=self.address, relief="flat",
                                       bg="#1b2633", fg="#f4f0e8", insertbackground="#f4f0e8",
                                       font=("Consolas", 10), highlightthickness=1,
                                       highlightbackground="#354354", highlightcolor="#88e0c3")
-        self.address_entry.pack(side="left", fill="x", expand=True, ipady=8, padx=(0, 9))
+        self.address_entry.pack(side="left", fill="x", expand=True, ipady=7, padx=(0, 9))
         self._button(address_row, "Save", self.save_address).pack(side="left")
-        tk.Label(body, text="Pair in Windows Settings first. Stop other headset control apps before connecting.",
+        tk.Label(body, text="Pair in Windows Bluetooth settings first. Close other headset control apps before connecting.",
                  fg="#8492a3", bg="#111821", wraplength=330, justify="left",
-                 font=("Segoe UI", 8)).pack(anchor="w", pady=(6, 0))
+                 font=("Segoe UI", 8)).pack(anchor="w", pady=(5, 0))
 
         self.power_button = self._button(body, "Power off headphones", self.power_off, danger=True)
-        self.power_button.pack(fill="x", pady=(17, 11), ipady=2)
+        self.power_button.pack(fill="x", pady=(12, 8), ipady=1)
         tk.Label(body, textvariable=self.status, fg="#c0cad6", bg="#111821", wraplength=330,
-                 justify="left", font=("Segoe UI", 9)).pack(anchor="w")
-
+                 justify="left", font=("Segoe UI", 8)).pack(anchor="w")
         self.root.bind("<Escape>", lambda _event: self.hide())
+
+    def _quick_tile(self, parent: tk.Widget, short_name: str, label: tk.StringVar, command) -> tk.Frame:
+        frame = tk.Frame(parent, bg="#1b2633", padx=8, pady=8)
+        circle = tk.Canvas(frame, width=104, height=88, bg="#1b2633", highlightthickness=0,
+                           cursor="hand2")
+        fill = "#3a4b5d"
+        circle.create_oval(10, 2, 94, 86, fill=fill, outline="#50677c", width=1, tags=("disc",))
+        circle.create_text(52, 44, text=short_name, fill="#e9f2f6",
+                           font=("Segoe UI", 16, "bold"), tags=("glyph",))
+        circle.pack()
+        circle.bind("<Button-1>", lambda _event: command())
+        circle.bind("<Enter>", lambda _event: circle.itemconfigure("disc", fill="#496176"))
+        circle.bind("<Leave>", lambda _event: circle.itemconfigure("disc", fill=fill))
+        label_widget = tk.Label(frame, textvariable=label, fg="#f4f0e8", bg="#1b2633",
+                                font=("Segoe UI", 9, "bold"), wraplength=130)
+        label_widget.pack(pady=(5, 1))
+        tk.Label(frame, text="CLICK TO CYCLE", fg="#8492a3", bg="#1b2633",
+                 font=("Segoe UI", 7, "bold")).pack()
+        frame._cycle_canvas = circle
+        return frame
+
+    def _draw_quick_controls(self) -> None:
+        eq_name = EQ_PRESETS[self.eq_index][0] if self.eq_index >= 0 else "Tap to set"
+        noise_name = NOISE_MODES[self.noise_mode] if self.noise_mode >= 0 else "Tap to set"
+        self.eq_label.set(f"EQ · {eq_name}")
+        self.noise_label.set(f"Noise · {noise_name}")
+        eq_color = "#5a4b78" if self.eq_index >= 0 else "#3a4b5d"
+        noise_color = "#478673" if self.noise_mode == 0 else "#586f9c" if self.noise_mode == 1 else "#3a4b5d"
+        self.eq_tile._cycle_canvas.itemconfigure("disc", fill=eq_color)
+        self.noise_tile._cycle_canvas.itemconfigure("disc", fill=noise_color)
 
     def _value_card(self, parent: tk.Widget, label: str, value: tk.StringVar, suffix: str) -> None:
         cell = tk.Frame(parent, bg="#1b2633")
@@ -158,7 +234,7 @@ class TrayClient:
         bg = "#88e0c3" if primary else "#603b47" if danger else "#253344"
         fg = "#111821" if primary else "#ffccd4" if danger else "#e3e9ef"
         return tk.Button(parent, text=label, command=command, relief="flat", borderwidth=0,
-                         padx=13, pady=9, bg=bg, fg=fg, activebackground="#a5efd8" if primary else bg,
+                         padx=13, pady=8, bg=bg, fg=fg, activebackground="#a5efd8" if primary else bg,
                          activeforeground=fg, cursor="hand2", font=("Segoe UI", 9, "bold"))
 
     def _build_tray(self) -> None:
@@ -188,14 +264,12 @@ class TrayClient:
 
     def _drag_window(self, event) -> None:
         if self._drag:
-            x = event.x_root - self._drag[0]
-            y = event.y_root - self._drag[1]
-            self.root.geometry(f"+{x}+{y}")
+            self.root.geometry(f"+{event.x_root - self._drag[0]}+{event.y_root - self._drag[1]}")
 
     def show(self) -> None:
         self.root.deiconify()
         self.root.update_idletasks()
-        width, height = 390, 560
+        width, height = 390, 650
         x = max(0, self.root.winfo_screenwidth() - width - 14)
         y = max(0, self.root.winfo_screenheight() - height - 65)
         self.root.geometry(f"{width}x{height}+{x}+{y}")
@@ -219,134 +293,230 @@ class TrayClient:
                                  parent=self.root)
             return
         try:
-            save_settings(address)
+            save_settings(address, self.eq_index, self.noise_mode)
         except OSError as error:
             messagebox.showerror("Could not save", str(error), parent=self.root)
             return
         self.address.set(address)
         self.status.set("Address saved on this PC." if address else "Saved address cleared.")
 
-    def _command(self, command: str, *args: str) -> list[str]:
+    def _save_local_state(self):
+        try:
+            save_settings(self.address.get().strip().upper(), self.eq_index, self.noise_mode)
+        except OSError as error:
+            return str(error)
+        return None
+
+    def _with_link(self, address: str, action):
+        if not address:
+            raise ValueError("Enter and save the headset's Bluetooth address first.")
+        if not ADDRESS_RE.fullmatch(address):
+            raise ValueError("Enter a Bluetooth address in the form AA:BB:CC:DD:EE:FF.")
         LOGS.mkdir(parents=True, exist_ok=True)
-        argv = [sys.executable, str(CLI), command, *args]
-        address = self.address.get().strip().upper()
-        if address:
-            if not ADDRESS_RE.fullmatch(address):
-                raise ValueError("Enter a Bluetooth address in the form AA:BB:CC:DD:EE:FF.")
-            argv.extend(["--addr", address])
-        argv.extend(["--log", str(LOGS)])
-        result = subprocess.run(argv, cwd=HERE, capture_output=True, text=True,
-                                timeout=30, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        output = (result.stdout + "\n" + result.stderr).strip()
-        if address:
-            output = output.replace(address, "[saved Bluetooth address]")
-        if result.returncode:
-            raise RuntimeError(output or f"The client exited with code {result.returncode}.")
-        return output.splitlines()
+        logger = Gaia.Logger(str(LOGS))
+        link = Gaia.Link(address, logger)
+        try:
+            logger.note("connecting to saved headset")
+            if not link.connect():
+                logger.note("could not connect. Is Smart Control Plus force-stopped? Are the headphones on and paired?")
+                raise RuntimeError("Could not connect. Check that the headphones are on, paired, and not in use by another app.")
+            return action(link)
+        finally:
+            link.close()
+            logger.note("done")
+            logger.close()
+
+    @staticmethod
+    def _get(link, command: int, payload: bytes = b"") -> bytes:
+        frame = Gaia.guarded_frame(command, payload)
+        reply, _frames = Gaia.transact(link, frame, command, timeout=2.0, settle=0)
+        if reply is None:
+            raise RuntimeError(f"No response for {command:04X}.")
+        if reply.type == 3:
+            raise RuntimeError(f"Headphones refused {command:04X}: {reply}.")
+        return reply.payload
+
+    @staticmethod
+    def _send_frames(link, frames: list[bytes]) -> None:
+        for frame in frames:
+            problem = Gaia.single_frame_problem(frame) or Gaia.blocked_reason(frame)
+            if problem:
+                raise ValueError(f"Command refused: {problem}.")
+            if not link.send(frame):
+                raise RuntimeError("The Bluetooth command was blocked before sending.")
+            time.sleep(0.06)
+        time.sleep(0.4)
 
     def _background(self, message: str, work, done) -> None:
         if self.busy:
             return
         self.busy = True
         self.status.set(message)
-        for widget in (self.refresh_button, self.apply_button, self.power_button):
-            widget.configure(state="disabled")
+        self._set_actions_enabled(False)
 
         def runner() -> None:
             try:
                 result, error = work(), None
-            except Exception as exception:  # show the actionable CLI error in the popup
+            except Exception as exception:
                 result, error = None, str(exception)
             if not self.closing:
                 self.root.after(0, lambda: finish(result, error))
 
         def finish(result, error) -> None:
             self.busy = False
-            for widget in (self.refresh_button, self.apply_button, self.power_button):
-                widget.configure(state="normal")
+            self._set_actions_enabled(True)
             done(result, error)
 
         threading.Thread(target=runner, name="gaia-command", daemon=True).start()
 
-    def refresh(self) -> None:
-        def work():
-            battery = self._command("battery")
-            timer = self._command("get-timer", "0")
-            return "\n".join(battery + timer)
+    def _set_actions_enabled(self, enabled: bool) -> None:
+        state = tk.NORMAL if enabled else tk.DISABLED
+        for widget in (self.refresh_button, self.apply_button, self.power_button,
+                       self.eq_tile._cycle_canvas, self.noise_tile._cycle_canvas):
+            widget.configure(state=state)
 
-        def done(output, error):
+    def refresh(self) -> None:
+        address = self.address.get().strip().upper()
+
+        def work():
+            def read(link):
+                battery = self._get(link, 0x0603)
+                timer = self._get(link, 0x0601, b"\x00")
+                if not battery or len(timer) < 3:
+                    raise RuntimeError("The headset returned incomplete status data.")
+                return battery[-1], (timer[1] << 8) | timer[2]
+            return self._with_link(address, read)
+
+        def done(values, error):
             if error:
-                self.status.set(self._short_error(error))
+                self.status.set(error)
                 return
-            battery_match = re.search(r"battery\s+(\d+)\s*%", output, re.IGNORECASE)
-            timer_match = re.search(r"auto power-off\s*=\s*(\d+)\s*s", output, re.IGNORECASE)
-            if battery_match:
-                self.battery.set(battery_match.group(1))
-            if timer_match:
-                seconds = int(timer_match.group(1))
-                self.timer_status.set("Never" if seconds == 0 else f"{seconds // 60} min")
-                for label, option_seconds in TIMER_OPTIONS:
-                    if seconds == option_seconds:
-                        self.timer.set(label)
-                        break
-            if battery_match or timer_match:
-                self.status.set("Headphones connected. Status is up to date.")
-            else:
-                self.status.set("Connected, but the headset did not return battery or timer values.")
+            battery, seconds = values
+            self.battery.set(str(battery))
+            self.timer_status.set("Never" if seconds == 0 else f"{seconds // 60} min")
+            for label, option_seconds in TIMER_OPTIONS:
+                if seconds == option_seconds:
+                    self.timer.set(label)
+                    break
+            self.status.set("Headphones connected. EQ and noise labels show the last mode set by this PC.")
 
         self._background("Connecting and reading status…", work, done)
+
+    def cycle_eq(self) -> None:
+        index = (self.eq_index + 1) % len(EQ_PRESETS)
+        name, gains = EQ_PRESETS[index]
+        address = self.address.get().strip().upper()
+
+        def work():
+            def apply(link):
+                frames = [Gaia.guarded_frame(0x1001, bytes((band, gain & 0xFF)))
+                          for band, gain in enumerate(gains)]
+                self._send_frames(link, frames)
+                return index, name
+            return self._with_link(address, apply)
+
+        def done(result, error):
+            if error:
+                self.status.set(error)
+                return
+            self.eq_index, applied_name = result
+            save_error = self._save_local_state()
+            self._draw_quick_controls()
+            suffix = f" The selection could not be saved: {save_error}" if save_error else ""
+            self.status.set(f"EQ set to {applied_name}.{suffix}")
+
+        self._background(f"Setting EQ to {name}…", work, done)
+
+    def cycle_noise(self) -> None:
+        mode = (self.noise_mode + 1) % len(NOISE_MODES)
+        name = NOISE_MODES[mode]
+        address = self.address.get().strip().upper()
+
+        def work():
+            def apply(link):
+                if mode == 0:        # Adaptive
+                    commands = ((0x1A04, b"\x01"), (0x1A00, b"\x03\x01"))
+                elif mode == 1:      # Custom
+                    commands = ((0x1A00, b"\x03\x00"), (0x1A04, b"\x01"))
+                else:                # Off
+                    commands = ((0x1A00, b"\x03\x00"), (0x1A04, b"\x00"))
+                frames = [Gaia.guarded_frame(command, payload) for command, payload in commands]
+                self._send_frames(link, frames)
+                return mode, name
+            return self._with_link(address, apply)
+
+        def done(result, error):
+            if error:
+                self.status.set(error)
+                return
+            self.noise_mode, applied_name = result
+            save_error = self._save_local_state()
+            self._draw_quick_controls()
+            suffix = f" The selection could not be saved: {save_error}" if save_error else ""
+            self.status.set(f"Noise control set to {applied_name}.{suffix}")
+
+        self._background(f"Setting noise control to {name}…", work, done)
 
     def apply_timer(self) -> None:
         seconds = dict(TIMER_OPTIONS).get(self.timer.get())
         if seconds is None:
             return
-
-        def work():
-            return "\n".join(self._command("set-timer", "0", str(seconds)))
-
-        def done(output, error):
-            if error:
-                self.status.set(self._short_error(error))
-                return
-            match = re.search(r"auto power-off\s*=\s*(\d+)\s*s", output, re.IGNORECASE)
-            self.timer_status.set("Never" if seconds == 0 else f"{seconds // 60} min")
-            self.status.set(f"Timer set to {match.group(1)} seconds." if match else "Timer command sent.")
-
+        address = self.address.get().strip().upper()
         label = self.timer.get()
         if not messagebox.askyesno("Change auto power-off timer",
                                    f"Set the headphones to switch off after {label}?", parent=self.root):
             return
+
+        def work():
+            def apply(link):
+                payload = bytes((0, (seconds >> 8) & 0xFF, seconds & 0xFF))
+                frame = Gaia.guarded_frame(0x0600, payload)
+                reply, _frames = Gaia.transact(link, frame, 0x0600, timeout=2.0, settle=0)
+                if reply is None or reply.type == 3:
+                    raise RuntimeError("The headset did not accept the timer setting.")
+                actual = self._get(link, 0x0601, b"\x00")
+                if len(actual) < 3:
+                    raise RuntimeError("The headset returned an incomplete timer value.")
+                return (actual[1] << 8) | actual[2]
+            return self._with_link(address, apply)
+
+        def done(actual, error):
+            if error:
+                self.status.set(error)
+                return
+            self.timer_status.set("Never" if actual == 0 else f"{actual // 60} min")
+            self.status.set(f"Auto power-off timer set to {actual} seconds.")
+
         self._background("Updating the timer…", work, done)
 
     def power_off(self) -> None:
         confirmed = messagebox.askyesno(
             "Power off headphones",
             "This switches the headphones fully off and disconnects Bluetooth.\n\n"
-            "You will need to press the headphone power button to turn them on again.",
+            "Press the headphone power button to turn them on again.",
             icon="warning", parent=self.root)
         if not confirmed:
             return
+        address = self.address.get().strip().upper()
 
         def work():
-            return "\n".join(self._command("raw", "FF 03 00 00 04 95 06 05"))
+            def apply(link):
+                # This documented action is intentionally sent only by this explicit app button.
+                frame = Gaia.build(Gaia.SENNHEISER, 0x0605)
+                if not link.send(frame):
+                    raise RuntimeError("The power-off command was blocked before sending.")
+                time.sleep(0.4)
+                return True
+            return self._with_link(address, apply)
 
-        def done(_output, error):
-            self.status.set(self._short_error(error) if error else
-                            "Power-off command sent. Press the headphone button to wake them.")
-            if not error:
-                self.battery.set("--")
+        def done(_result, error):
+            if error:
+                self.status.set(error)
+                return
+            self.battery.set("--")
+            self.status.set("Power-off command sent. Press the headphone button to wake them.")
 
         self._background("Sending the power-off command…", work, done)
-
-    @staticmethod
-    def _short_error(error: str) -> str:
-        lines = [line.strip() for line in error.splitlines() if line.strip()]
-        useful = [line for line in lines if any(word in line.lower() for word in
-                  ("no headset address", "could not connect", "connect failed", "error", "refused", "timed out"))]
-        message = "\n".join((useful or lines)[-3:]) or "The command failed. Check the private log for details."
-        if len(message) > 360:
-            message = message[:357].rstrip() + "..."
-        return message
 
 
 def main() -> None:
