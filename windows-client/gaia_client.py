@@ -44,7 +44,12 @@ import sys
 import time
 from datetime import datetime
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools"))
+_TOOLS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools")
+if not os.path.isfile(os.path.join(_TOOLS_DIR, "m4_commands.py")):
+    # PyInstaller places bundled data below _MEIPASS instead of alongside the
+    # original repository tree. Keep the source-tree path as the normal route.
+    _TOOLS_DIR = os.path.join(getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))), "tools")
+sys.path.insert(0, _TOOLS_DIR)
 import m4_commands as M4  # noqa: E402  (documented command table, shared with the decoder)
 
 # Headset address: --addr, else the M4_ADDR environment variable, else the first line of
@@ -420,7 +425,8 @@ class Logger:
     def _w(self, line):
         stamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         text = "%s %s" % (stamp, line)
-        print(text)
+        if sys.stdout is not None:
+            print(text)
         self.fh.write(text + "\n")
 
     def tx(self, frame, blocked=None):
@@ -434,6 +440,10 @@ class Logger:
 
     def note(self, msg):
         self._w("# " + msg)
+
+    def close(self):
+        if not self.fh.closed:
+            self.fh.close()
 
 # -------------------------------------------------------------- the sweep
 
@@ -942,3 +952,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
