@@ -175,7 +175,8 @@ class TrayClient:
                                       font=("Consolas", 10), highlightthickness=1,
                                       highlightbackground="#354354", highlightcolor="#88e0c3")
         self.address_entry.pack(side="left", fill="x", expand=True, ipady=7, padx=(0, 9))
-        self._button(address_row, "Save", self.save_address).pack(side="left")
+        self.save_button = self._button(address_row, "Save", self.save_address)
+        self.save_button.pack(side="left")
         tk.Label(body, text="Pair in Windows Bluetooth settings first. Close other headset control apps before connecting.",
                  fg="#8492a3", bg="#111821", wraplength=330, justify="left",
                  font=("Segoe UI", 8)).pack(anchor="w", pady=(5, 0))
@@ -371,9 +372,10 @@ class TrayClient:
 
     def _set_actions_enabled(self, enabled: bool) -> None:
         state = tk.NORMAL if enabled else tk.DISABLED
-        for widget in (self.refresh_button, self.apply_button, self.power_button,
-                       self.eq_tile._cycle_canvas, self.noise_tile._cycle_canvas):
+        for widget in (self.refresh_button, self.apply_button, self.power_button, self.save_button,
+                       self.address_entry, self.eq_tile._cycle_canvas, self.noise_tile._cycle_canvas):
             widget.configure(state=state)
+        self.timer_combo.configure(state="readonly" if enabled else "disabled")
 
     def refresh(self) -> None:
         address = self.address.get().strip().upper()
