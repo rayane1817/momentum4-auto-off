@@ -1,87 +1,34 @@
-## Windows tray app
+# MOMENTUM 4 Windows Companion
 
-The desktop app keeps a compact control window one click away from the Windows notification area. Its two primary circular controls match the Android Quick Settings behavior: click EQ to cycle through Neutral, Rock, Pop, Dance, Hip-Hop, Classical, Movie, and Jazz; click Noise to cycle Adaptive, Custom, and Off. It also shows battery and auto power-off status, lets you change the timer, and has a confirmed power-off action. The EQ and noise labels reflect the last successful setting sent by this PC. Custom EQ curves stored in the Android app are not synced to Windows. It uses the existing GAIA transport and works on Windows 10 or later.
+A Windows 10 and Windows 11 desktop client for the MOMENTUM 4 GAIA control channel. It is a normal desktop app that stays available from the notification area; the tray menu provides quick cycle actions for EQ presets and noise control.
 
-### Install and run
+## What it controls
 
-1. Pair the headphones in Windows Bluetooth settings. Close Smart Control Plus or any other app currently controlling the headset.
-2. Install Python 3.9 or later, including Tcl/Tk.
-3. In this folder, install the tray dependencies and start the app:
+- Noise control: Adaptive, Custom and Off; Custom includes ANC-to-transparency level and anti-wind settings.
+- Equaliser: five bands (63 Hz to 8 kHz), eight verified presets, five Windows-local custom slots, bass boost and speech clarity.
+- Listening: Smart Pause, Low Latency, Hi-Res 24/96, Auto-answer, Comfort Call, call transparency, on-head detection and touch controls.
+- Device: battery, model, firmware and hardware revision; firmware timer; documented raw GAIA frame sender; report and local logs.
+- Auto power-off: a tray-resident idle guard that checks Windows output audio every five seconds and sends the documented power-off command only after the selected silent period. If Core Audio cannot be read, it fails closed and does not switch the headphones off.
 
-   ```bat
-   py -3 -m pip install -r requirements.txt
-   run-client.bat
-   ```
+The device address is saved locally at `%LOCALAPPDATA%\Momentum4Companion\settings.json`; GAIA connection logs are saved under `%LOCALAPPDATA%\Momentum4Companion\logs`.
 
-4. In the app, enter the headset's Bluetooth address and select **Save**. Find it under Windows Settings > Bluetooth > the headphones > Properties. The address and last EQ/noise selections are saved locally in `%LOCALAPPDATA%\Momentum4Companion\settings.json`.
+## Use
 
-The tray popup can read the battery and auto power-off timer, set the timer to Never / 15 / 30 / 60 minutes, or send the confirmed **Power off headphones** action. Power off turns off Bluetooth; press the physical headphone button to wake them. The app asks for confirmation first.
+1. Pair the headphones in Windows Bluetooth settings. Close Smart Control Plus and any other GAIA control app that may hold the connection.
+2. Run `Momentum4Companion.exe`.
+3. Open **Device**, enter the Bluetooth address in `AA:BB:CC:DD:EE:FF` form, and select **Connect and refresh**. Windows exposes this address under Bluetooth device properties.
+4. Use the Home page for the primary controls. Closing the app window keeps it in the notification area; use **Exit** in the tray menu to fully quit it.
 
-Close the popup to leave it running in the tray. Use the tray menu's **Exit** command to quit. Logs are kept under `%LOCALAPPDATA%\Momentum4Companion\logs` because the existing GAIA log includes the Bluetooth address.
+The auto power-off guard listens for audible Core Audio output. Windows does not provide the Android phone-call state used by the Android client, so the guard is deliberately conservative and only powers off when its audio meter is available and silent for the entire interval.
 
-### Build a standalone EXE
+## Build a standalone EXE
 
-On Windows, install the build dependencies and run `build-exe.bat` from this folder:
+Install Python 3.9+ with Tcl/Tk, then from the repository root run:
 
 ```bat
-py -3 -m pip install -r requirements-build.txt
-build-exe.bat
+py -3 -m pip install -r windows-client\requirements-build.txt
+windows-client\build-exe.bat
 ```
 
-This creates `dist\Momentum4Companion.exe`. The EXE includes Python and the tray dependencies, so end users do not need a Python installation.
-
-# MOMENTUM 4 GAIA client (PC)
-
-A command-line tool to talk to the MOMENTUM 4 over its GAIA control channel (Bluetooth Classic, RFCOMM), from Windows or Linux. Pure Python 3.9+, no packages to install. See `../docs/protocol.md` for the protocol and the power-off candidate list.
-
-Tested against a real headset on Windows 10 with Python 3.12: `verify`, `battery`, `snapshot` and `check` work. On 22 Oct 2026 a scoped sweep of the power/battery feature found the remote power-off command `0495:0605` (see `../docs/search-log.md`). That sweep is now off by default (see below).
-
-## Before you run
-1. The headset must not be in use by any other GAIA app. On the phone that normally holds it, force stop Smart Control Plus, or just keep the headphones away from the phone.
-2. Pair the headphones to the PC (Windows Settings > Bluetooth) and make sure they're connected.
-3. Have Python 3.9+ installed.
-
-## Quick check
-```
-python gaia_client.py verify
-```
-First time: put your headphones' Bluetooth address (Windows Settings > Bluetooth > the headphones > Properties) on the first line of `windows-client/m4_addr.txt`. That file is git-ignored. Or set `M4_ADDR`, or pass `--addr`.
-
-Expected: `connected on RFCOMM channel found by GAIA UUID` (Windows) then `<- 0495:0701 resp [00 00 3C] => auto power-off = 60 s`. If you see that, the link and the framing work.
-
-Other reads:
-```
-python gaia_client.py battery
-python gaia_client.py get-timer 0
-python gaia_client.py raw "FF 03 00 00 04 95 04 02"
-```
-
-Set a timer (seconds):
-```
-python gaia_client.py set-timer 0 900
-```
-
-## Sweeps are off by default
-The power-off command is already known (`0495:0605`), so the blind sweep that found it is disabled: `python gaia_client.py sweep` refuses to run. A sweep sends undocumented commands to your headphones, one per second.
-
-For research only, at your own risk, set `M4_ALLOW_SWEEP=1` first. Even then it skips every command the catalogue (`../tools/m4_commands.py`) marks as never sent from the PC, including `0605`, and everything on the blocklist. Scopes (`--features`): `3` power/battery, `0q` Qualcomm core, `2` on-head/physical, `0s` Sennheiser config, `all`. Range of request-command numbers: `--range 4:127` (default).
-
-`raw` takes exactly one complete frame (`FF 03`, a length that matches, nothing after it). A typo in the hex, a second frame or stray bytes is refused and nothing is sent.
-
-## Safety
-The tool refuses to send, whatever you type: factory reset (`0495:0040`), firmware-update / DFU mode (`0495` feature 1), deleting or disconnecting paired devices (`0495:1403/1405/1406`), the reset commands next to power-off (`0495:0607`, `0609-06FF`), device rename (`0495:1500`), and Qualcomm's upgrade feature (`001D` feature 6). `tools/blocklist_parity_test.py` checks that the app blocks the same. A sweep (if you enable one) stays inside features identified as power/system and never touches the unknown features 16/19 (those need careful manual identification first, see `../docs/protocol.md`). Worst realistic outcome: a "ship/transport mode" that needs a USB charger plug to wake. Annoying, reversible. Stop and report if the headset goes unresponsive.
-
-## Options
-```
---addr AA:BB:CC:DD:EE:FF   headset MAC (default: $M4_ADDR, then windows-client/m4_addr.txt)
---channel N                force an RFCOMM channel, skip SDP
---log DIR                  where to write logs (default ./logs)
-```
-
-## How it connects
-It finds the GAIA channel by its service UUID (Windows) or by SDP (pybluez). It never guesses a channel, not even 15, unless you pass `--channel`: GAIA frames on another RFCOMM service (e.g. iAP2) can switch a headset off. Every attempt and every frame, in and out, is timestamped in the log under `logs/`.
-
-## Windows notes
-- Stock Windows Python has no `socket.AF_BLUETOOTH`, so on Windows the client opens RFCOMM through the Microsoft Bluetooth stack (WinSock `AF_BTH`) with ctypes. It connects by the GAIA service UUID and lets Windows find the channel by SDP; `--channel` is the only way to force a raw channel number. No packages needed (`pybluez2` does not install on Python 3.12 anyway).
-- If Windows keeps auto-reconnecting the audio profile and the control channel won't open, unpair the headset from any other nearby device first.
+The build is written to `windows-client\dist\Momentum4Companion.exe` and includes Python and all runtime dependencies.
 
