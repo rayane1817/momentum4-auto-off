@@ -1,3 +1,24 @@
+## Windows tray app
+
+The optional desktop app keeps a small control window one click away from the Windows notification area. It uses the existing GAIA client for Bluetooth and works on Windows 10 or later.
+
+### Install and run
+
+1. Pair the headphones in Windows Bluetooth settings. Close Smart Control Plus or any other app currently controlling the headset.
+2. Install Python 3.9 or later, including Tcl/Tk.
+3. In this folder, install the tray dependencies and start the app:
+
+   ```bat
+   py -3 -m pip install -r requirements.txt
+   run-client.bat
+   ```
+
+4. In the app, enter the headset's Bluetooth address and select **Save**. Find it under Windows Settings > Bluetooth > the headphones > Properties. The address is saved locally in `%LOCALAPPDATA%\\Momentum4Companion\\settings.json`.
+
+The tray popup can read the battery and auto power-off timer, set the timer to Never / 15 / 30 / 60 minutes, or send the confirmed **Power off headphones** action. Power off turns off Bluetooth; press the physical headphone button to wake them. The app asks for confirmation first.
+
+Close the popup to leave it running in the tray. Use the tray menu's **Exit** command to quit. Logs are kept under `%LOCALAPPDATA%\\Momentum4Companion\\logs` because the existing CLI log includes the Bluetooth address.
+
 # MOMENTUM 4 GAIA client (PC)
 
 A command-line tool to talk to the MOMENTUM 4 over its GAIA control channel (Bluetooth Classic, RFCOMM), from Windows or Linux. Pure Python 3.9+, no packages to install. See `../docs/protocol.md` for the protocol and the power-off candidate list.
