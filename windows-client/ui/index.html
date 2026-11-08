@@ -44,7 +44,7 @@ button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px so
 
 .card{background:var(--card);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:16px}
 .modes{display:flex;justify-content:space-around}
-.mode{display:flex;flex-direction:column;align-items:center;gap:8px;width:96px}
+.mode{display:flex;flex-direction:column;align-items:center;gap:8px;width:84px}
 .mode .c{width:60px;height:60px;border-radius:30px;display:flex;align-items:center;justify-content:center;background:var(--btn);color:var(--ink2);transition:background .15s,color .15s}
 .mode .l{font-size:12px;color:var(--ink2)}
 .mode:hover .c{filter:brightness(1.15)}
@@ -180,9 +180,12 @@ const I = {
   back: 'M19 12H5M11 6l-6 6 6 6',
   cog: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z',
   adaptive: 'M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6zM18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z',
-  custom: 'M4 8h10M18 8h2M4 16h2M10 16h10M16 6v4M8 14v4', off: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM5.6 5.6l12.8 12.8'
+  custom: 'M4 8h10M18 8h2M4 16h2M10 16h10M16 6v4M8 14v4',
+  transp: 'M3 12c1.5-3 3-3 4.5 0s3 3 4.5 0 3-3 4.5 0 3 3 4.5 0M3 6.5c1.5-2 3-2 4.5 0M16.5 17.5c1.5 2 3 2 4.5 0',
+  laptop: 'M5 6h14v9H5zM3 18h18', off: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM5.6 5.6l12.8 12.8'
 };
-const NOISE = ['Adaptive', 'Custom', 'Off'], NOISE_IC = [I.adaptive, I.custom, I.off];
+const NOISE = ['Adaptive', 'Custom', 'Off', 'Transparency'], NOISE_IC = [I.adaptive, I.custom, I.off, I.transp];
+const NOISE_ORDER = [0, 1, 3, 2], PROMPTS = ['Off', 'Tones', 'Tones and voice'];
 const WIND = ['Off', 'Auto', 'Max'], HZ = ['63', '250', '1K', '4K', '8K'];
 const LISTEN = ['smart_pause', 'low_latency', 'hires', 'auto_answer', 'comfort_call', 'on_head', 'touch'];
 // 5x7 dot font (DotNumerals)
@@ -212,7 +215,7 @@ function presets() {
     .concat(S.presets.custom.map((p) => ({ name: p[0], g: p[1], custom: true })));
 }
 function presetName(g) { const m = presets().find((p) => same(p.g, g)); return m ? m.name : 'Custom curve'; }
-function noiseIdx() { return S.anc_on == null ? -1 : !S.anc_on ? 2 : S.adaptive_on ? 0 : 1; }
+function noiseIdx() { return S.anc_on == null ? -1 : !S.anc_on ? 2 : S.adaptive_on ? 0 : S.level === 100 ? 3 : 1; }
 
 function dots(str, liveDot, label) {
   let h = `<div class="dots" role="img" aria-label="${esc(label)}">`;
@@ -253,7 +256,7 @@ const tog = (key, label, sub, icon) => row({ icon, label, sub,
 // ------------------------------------------------------------- pages
 
 function statusText() {
-  if (live()) return 'Connected' + (S.firmware ? ' · fw ' + S.firmware : '');
+  if (live()) return 'Connected' + (S.charging ? ' · charging' : '') + (S.firmware ? ' · fw ' + S.firmware : '');
   return S.msg || 'Not connected';
 }
 
@@ -266,8 +269,8 @@ function home() {
     `<div class="status"><span class="led ${L ? 'live' : busy ? 'busy' : ''}"></span><span>${esc(statusText())}</span></div>` +
     `<button class="pill ${L ? '' : 'key'}" data-act="conn" ${busy || S.device == null ? 'disabled' : ''}>${L ? 'Disconnect' : busy ? 'Connecting...' : 'Connect'}</button></div>`;
   h += `<div class="card ${L ? '' : 'gate'}"><div>Noise control</div><div class="modes" role="radiogroup" aria-label="Noise mode">` +
-    NOISE.map((n, i) => `<button class="mode ${ni === i ? 'sel' : ''}" role="radio" aria-checked="${ni === i}" data-act="noise" data-i="${i}"><span class="c">${svg(NOISE_IC[i], 22, 1.6)}</span><span class="l">${n}</span></button>`).join('') + '</div>';
-  if (ni === 1) {
+    NOISE_ORDER.map((i) => `<button class="mode ${ni === i ? 'sel' : ''}" role="radio" aria-checked="${ni === i}" data-act="noise" data-i="${i}"><span class="c">${svg(NOISE_IC[i], 22, 1.6)}</span><span class="l">${NOISE[i]}</span></button>`).join('') + '</div>';
+  if (ni === 1 || ni === 3) {
     h += `<div class="custom"><div class="ends"><span>ANC</span><span class="mono" id="lvlv">${S.level}</span><span>Transparency</span></div>` +
       `<input class="lvl" type="range" min="0" max="100" value="${S.level}" data-range="level" style="--p:${S.level}%" aria-label="ANC to transparency">` +
       `<div class="wind"><span>Anti-wind</span>` + WIND.map((w, i) => `<button class="seg ${S.anti_wind === i ? 'sel' : ''}" aria-pressed="${S.anti_wind === i}" data-act="wind" data-i="${i}">${w}</button>`).join('') + '</div></div>';
@@ -313,7 +316,10 @@ function listening() {
     row({ icon: I.ear, label: 'Transparency during calls', cls: 'stack', right: val(S.call == null ? '-' : S.call + ' / 4', 'callv') +
       `<input class="lvl" type="range" min="0" max="4" step="1" value="${S.call || 0}" data-range="call" style="--p:${(S.call || 0) * 25}%" aria-label="Transparency during calls">` }) + '</div>' +
     '<div class="sec">Headphones</div><div class="group">' +
-    tog('on_head', 'On-head detection', '', I.head) + tog('touch', 'Touch controls', '', I.hand) + '</div></div>';
+    tog('on_head', 'On-head detection', '', I.head) + tog('touch', 'Touch controls', '', I.hand) +
+    row({ icon: I.speech, label: 'Tones and voice prompts', cls: 'stack', right: '<span class="wind" style="flex-basis:100%;padding-left:32px">' +
+      PROMPTS.map((p, i) => `<button class="seg ${S.prompts === i ? 'sel' : ''}" aria-pressed="${S.prompts === i}" data-act="prompts" data-i="${i}" ${S.prompts == null ? 'disabled' : ''}>${p}</button>`).join('') + '</span>' }) +
+    '</div></div>';
 }
 
 function device() {
@@ -327,6 +333,17 @@ function device() {
       right: sel ? '<span class="ok">✓</span>' : '' });
   });
   h += row({ icon: I.refresh, label: 'Rescan', sub: 'Read the paired devices again', act: 'rescan' }) + '</div>';
+  if (L && S.peers.length) {
+    h += '<div class="sec">Connections</div><div class="group">';
+    S.peers.forEach((p, i) => {
+      if (!p) { h += row({ icon: I.phones, label: 'Reading...' }); return; }
+      const me = i === S.own_index;
+      h += row({ icon: me ? I.laptop : I.phones, label: p.name, act: me || p.connected ? '' : 'peer', attrs: `data-i="${i}"`,
+        sub: me ? 'This PC' : p.connected ? 'Connected' : 'Not connected. Tap to connect',
+        right: p.connected ? '<span class="ok">●</span>' : '' });
+    });
+    h += row({ icon: I.refresh, label: 'Read again', sub: 'The headphones keep two connections at a time', act: 'peers' }) + '</div>';
+  }
   h += '<div class="sec">Info</div><div class="group">' +
     row({ icon: I.bolt, label: 'Battery', right: val(L && S.battery != null ? S.battery + ' %' : nr) }) +
     row({ icon: I.info, label: 'Model', right: val(L && S.model ? S.model : nr) }) +
@@ -517,7 +534,10 @@ document.addEventListener('click', (e) => {
   switch (d.act) {
     case 'go': U.page = d.page; U.showLog = false; U.sheet = false; window.scrollTo(0, 0); break;
     case 'conn': api(live() ? 'disconnect' : 'connect'); break;
-    case 'noise': S.anc_on = i !== 2; S.adaptive_on = i === 0; api('noise', { mode: i }); break;
+    case 'noise': S.anc_on = i !== 2; S.adaptive_on = i === 0; if (i === 3) S.level = 100; else if (i === 1 && S.level === 100) S.level = S.custom_level; api('noise', { mode: i }); break;
+    case 'prompts': S.prompts = i; api('prompts', { value: i }); break;
+    case 'peer': api('peer', { index: i }).then((r) => { if (r.ok) toast('Asked the headphones to connect it.'); }); break;
+    case 'peers': api('peers'); break;
     case 'wind': S.anti_wind = i; api('wind', { index: i }); break;
     case 'toggle': { const on = !S.toggles[d.key]; S.toggles[d.key] = on; api('toggle', { key: d.key, on }); break; }
     case 'speech': S.speech = !S.speech; api('speech', { on: S.speech }); break;

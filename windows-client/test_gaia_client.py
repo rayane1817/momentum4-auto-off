@@ -114,7 +114,7 @@ class TestGuard(unittest.TestCase):
         for cmd, payload in [(0x0605, b""), (0x0606, b""), (0x0607, b""), (0x1405, b"\x00"),
                              (0x1403, b"\x00"), (0x0040, b""), (0x0200, b""), (0x1A02, b"\x65"),
                              (0x0805, b"\x05"), (0x1001, b"\x05\x00"), (0x1A00, b"\x02\x01"),
-                             (0x0007, b"\x03"), (0x1500, b"")]:
+                             (0x0007, b"\x0A"), (0x1500, b""), (0x1402, b"\x08")]:
             with self.assertRaises(ValueError, msg="%04X" % cmd):
                 G.guarded_frame(cmd, payload)
 

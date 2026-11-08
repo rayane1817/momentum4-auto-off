@@ -161,7 +161,8 @@ class TrayTest(CoreTest):
         self.core.quick("noise", 2)
         self.core.on_worker(("oneshot", False, ("noise", 2)))
         self.assertEqual(self.tray.balloons, ["Can't reach MOMENTUM 4. Are they on?"])
-        self.assertEqual(self.core.tray_state(), {"noise": None, "eq": None, "battery": None, "busy": False})
+        self.assertEqual(self.core.tray_state(), {"noise": None, "eq": None, "battery": None, "charging": False,
+                                                  "linked": False, "busy": False})
 
     def test_linked_sends_through_the_link_and_follows_the_headset(self):
         self.connect()
@@ -198,6 +199,67 @@ class TrayTest(CoreTest):
         self.assertNotIn("off ", texts)
 
 
+class FeatureTest(CoreTest):
+    """Transparency, voice prompts, connections, reconnect, the m4ctl actions."""
+
+    def frame(self, cmd, payload):
+        self.core.on_worker(("frame", G.Frame(3, 0x0495, cmd, bytes(payload))))
+
+    def test_transparency_and_custom_level(self):
+        self.connect()
+        self.core.handle({"action": "level", "value": 30})
+        self.core.handle({"action": "noise", "mode": 3})
+        self.assertEqual(self.w.sent()[-1], "FF 03 00 01 04 95 1A 02 64")
+        self.assertEqual(self.core.tray_state()["noise"], 3)
+        self.core.handle({"action": "noise", "mode": 1})                  # back to Custom at 30, not 100
+        self.assertEqual(self.w.sent()[-1], "FF 03 00 01 04 95 1A 02 1E")
+        self.assertEqual(self.core.snapshot()["level"], 30)
+
+    def test_prompts(self):
+        self.connect()
+        self.assertTrue(self.core.handle({"action": "prompts", "value": 1})["ok"])
+        self.assertEqual(self.w.sent(), ["FF 03 00 01 04 95 08 01 01", "FF 03 00 00 04 95 08 02"])
+        self.assertFalse(self.core.handle({"action": "prompts", "value": 3})["ok"])
+
+    def test_peers_read_after_the_count_and_names_stay_out_of_logs(self):
+        self.connect()
+        self.frame(0x1500, [0, 2])
+        self.assertEqual(self.w.sent(), ["FF 03 00 01 04 95 14 01 00", "FF 03 00 01 04 95 14 01 01"])
+        self.frame(0x1501, [0, 1, 0] + list(b"Alex phone"))
+        self.frame(0x1501, [1, 0, 1] + list(b"DESKTOP-1"))
+        self.frame(0x1507, [1])
+        snap = self.core.snapshot()
+        self.assertEqual(snap["peers"], [{"name": "Alex phone", "connected": False},
+                                         {"name": "DESKTOP-1", "connected": True}])
+        self.assertEqual(snap["own_index"], 1)
+        report = self.core.handle({"action": "report"})["text"]
+        log = "\n".join(self.core.log_lines)
+        for text in (report, log):
+            self.assertNotIn("Alex", text)
+            self.assertNotIn(G.hexstr(b"Alex"), text)
+        self.assertTrue(self.core.handle({"action": "peer", "index": 0})["ok"])
+        self.assertEqual(self.w.sent()[-1], "FF 03 00 01 04 95 14 02 00")
+        self.assertFalse(self.core.handle({"action": "peer", "index": 5})["ok"])
+
+    def test_reconnect_only_after_a_drop_not_after_disconnect(self):
+        self.connect()
+        self.core.on_worker(("state", "dropped", "x"))
+        self.assertTrue(self.core.maybe_reconnect(now=1e9))
+        self.connect()
+        self.core.handle({"action": "disconnect"})
+        self.core.on_worker(("state", "disconnected", None))
+        self.assertFalse(self.core.maybe_reconnect(now=2e9))
+
+    def test_m4ctl_actions(self):
+        r = self.core.handle({"action": "quick", "what": "eq", "value": "rock"})
+        self.assertTrue(r["ok"])
+        self.assertEqual(self.w.items[-1][0], "oneshot")
+        self.core.on_worker(("oneshot", True, ("eq", "Rock")))
+        self.assertFalse(self.core.handle({"action": "quick", "what": "eq", "value": "nope"})["ok"])
+        st = self.core.handle({"action": "status"})["status"]
+        self.assertEqual((st["eq"], st["conn"]), ("Rock", "disconnected"))
+
+
 class IconTest(unittest.TestCase):
     def test_glyphs_render_and_differ(self):
         import m4_tray as T
@@ -208,6 +270,20 @@ class IconTest(unittest.TestCase):
         self.assertNotEqual(imgs[0], imgs[1])
         res = T.icon_resource(imgs[0])
         self.assertEqual(len(res), 40 + 16 * 16 * 4 + 4 * 16)
+
+    def test_panel_layout_and_hits(self):
+        import m4_tray as T
+        items = T.panel_layout({"noise": 3, "eq": "Rock", "battery": 40, "charging": True, "linked": True})
+        modes = [i for i in items if i["kind"] == "mode"]
+        self.assertEqual([m["mode"] for m in modes], [0, 1, 3, 2])
+        self.assertTrue(modes[2]["sel"])
+        x, y, w, h = modes[0]["rect"]
+        self.assertEqual(T.hit(items, x + w / 2, y + h / 2), T.ID_NOISE)
+        self.assertEqual(T.hit(items, 1, 1), None)
+        busy = T.panel_layout({"busy": True})
+        x, y, w, h = [i for i in busy if i["cmd"] == T.ID_NEXT][0]["rect"]
+        self.assertIsNone(T.hit(busy, x + 1, y + 1))
+        self.assertEqual(T.panel_origin((1900, 1070), (0, 0, 1920, 1040), (328, 252)), (1580, 776))
 
     def test_tooltip_fits_and_menu_marks_the_mode(self):
         import m4_tray as T

@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gaia_client as G  # noqa: E402  (also puts ../tools on sys.path)
 import m4_commands as M4  # noqa: E402
 
-APP_VERSION = "0.2.1"
+APP_VERSION = "0.2.2"
 SENN = G.SENNHEISER
 
 BANDS = ("63 Hz", "250 Hz", "1 kHz", "4 kHz", "8 kHz")
@@ -27,7 +27,11 @@ BUILTIN_PRESETS = [
     ("Classical", (-20, -15, 0, 35, 40)), ("Movie", (0, 0, 20, 20, -20)), ("Jazz", (-32, 0, 22, 22, 0)),
 ]
 
-NOISE_MODES = ("Adaptive", "Custom", "Off")
+NOISE_MODES = ("Adaptive", "Custom", "Off", "Transparency")   # index = wire meaning below, kept stable
+NOISE_ORDER = (0, 1, 3, 2)                   # how the UI and the tray list them
+TRANSPARENCY_LEVEL = 100                     # 1A02: 0 = full ANC, 100 = full transparency
+PROMPTS = ("Off", "Tones", "Tones and voice")   # 0801 / 0802 (Ariazonaa, Smart Control's m4.json)
+MAX_PEERS = 8
 ANTI_WIND = ("Off", "Auto", "Max")           # UI order; wire 0 off, 1 Max, 2 Auto (T17)
 
 # Simple on/off settings: key -> (label, set cmd, get cmd, inverted). Inverted = wire 0 means on.
@@ -45,8 +49,8 @@ TOGGLE_BY_KEY = {t[0]: t for t in TOGGLES}
 
 # Read at connect, same list as MainActivity.readAllConfig() plus the timer.
 READ_AT_CONNECT = [0x1A05, 0x1A01, 0x1A03, 0x080D, 0x080B, 0x0818, 0x0815, 0x1607, 0x0806, 0x0401,
-                   0x0406, 0x1009, 0x0804, 0x0603, 0x1206, 0x1201, 0x1200]
-NOTIFY_FEATURES = (0x0D, 0x08, 0x04)         # noise, EQ, audio/device (as the official app)
+                   0x0406, 0x1009, 0x0804, 0x0603, 0x0602, 0x0802, 0x1206, 0x1201, 0x1200, 0x1407, 0x1400]
+NOTIFY_FEATURES = (0x0D, 0x08, 0x04, 0x03)   # noise, EQ, audio/device (as the official app), battery
 
 
 def anti_wind_swap(v):
@@ -99,7 +103,14 @@ def noise_frames(mode, level):
         return [req(0x1A04, 1), req(0x1A00, 3, 1)]
     if mode == 1:
         return [req(0x1A00, 3, 0), req(0x1A04, 1), req(0x1A02, max(0, min(100, int(level))))]
+    if mode == 3:
+        return transparency_frames()
     return [req(0x1A00, 3, 0), req(0x1A04, 0)]
+
+
+def transparency_frames():
+    """Custom at full transparency: ANC on, adaptive off, level 100 (docs/command-map.md 1A02)."""
+    return [req(0x1A00, 3, 0), req(0x1A04, 1), req(0x1A02, TRANSPARENCY_LEVEL)]
 
 
 def widget_noise_frames(mode):
@@ -109,6 +120,8 @@ def widget_noise_frames(mode):
         return [req(0x1A04, 1), req(0x1A00, 3, 1)]
     if mode == 1:
         return [req(0x1A00, 3, 0), req(0x1A04, 1)]
+    if mode == 3:
+        return transparency_frames()
     return [req(0x1A00, 3, 0), req(0x1A04, 0)]
 
 
@@ -144,8 +157,27 @@ def call_transparency_frames(level):
     return [req(0x0805, max(0, min(4, int(level)))), req(0x0806)]
 
 
-def battery_frame():
-    return req(0x0603)
+def battery_frames():
+    return [req(0x0603), req(0x0602)]
+
+
+def prompts_frames(mode):
+    """0 off, 1 tones, 2 tones and voice prompts."""
+    return [req(0x0801, max(0, min(2, int(mode)))), req(0x0802)]
+
+
+def peer_count_frame():
+    return req(0x1400)
+
+
+def peer_frames(count):
+    """1401 for each entry the headset reported in 1400, never past it (an indexed request past
+    the list may act instead of answer)."""
+    return [req(0x1401, i) for i in range(max(0, min(MAX_PEERS, int(count))))]
+
+
+def peer_connect_frame(index):
+    return req(0x1402, int(index))
 
 
 def preset_name(gains10, custom=None):
@@ -190,6 +222,18 @@ def decode(f):
     out = {}
     if base == 0x0603 and b0 is not None:
         out["battery"] = b0
+    elif base == 0x0602 and b0 is not None:          # 0702 reply [x, x] or 0682 notif [x]
+        out["charging"] = b0 == 1
+    elif base == 0x0802 and b0 is not None and b0 <= 2:
+        out["prompts"] = b0
+    elif base == 0x1400 and len(p) == 2:
+        n = (p[0] << 8) | p[1]
+        if n <= 64:
+            out["peer_count"] = n
+    elif base == 0x1401 and len(p) >= 3:
+        out["peer"] = (p[0], p[2] != 0, bytes(p[3:]).split(b"\0")[0].decode("utf-8", "replace").strip())
+    elif base == 0x1407 and len(p) == 1:
+        out["own_index"] = b0
     elif base == 0x1206 and p:
         out["model"] = bytes(p).split(b"\0")[0].decode("ascii", "replace").strip()
     elif base == 0x1201 and len(p) >= 6:
@@ -225,8 +269,12 @@ def decode(f):
     return out
 
 
-def noise_mode_index(anc_on, adaptive_on):
-    return 2 if not anc_on else 0 if adaptive_on else 1
+def noise_mode_index(anc_on, adaptive_on, level=None):
+    if not anc_on:
+        return 2
+    if adaptive_on:
+        return 0
+    return 3 if level == TRANSPARENCY_LEVEL else 1
 
 
 # ------------------------------------------------------------ paired devices (Windows)

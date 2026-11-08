@@ -39,7 +39,8 @@ Framing: GAIA v3, `FF 03 | len | vendor | command | payload`. Command = `feature
 | **`0605`** | **True power-off**, no payload (T8-T10, T12, T20) | ✅ |
 | `0606` | Never probed | ❓ |
 | `060E` | Seen | ❓ |
-| `0682` | Charger in/out notification `[01/00]` | 🟡 |
+| `0602` | Charging state: reply `0702 [00 00]` when not charging (8 Nov 2026); byte 0 = 1 while charging (Ariazonaa) | ✅ |
+| `0682` | Charger in/out notification `[01/00]`. Needs `0007 [03]` | 🟡 |
 | `0607`, `0609`-`06FF` | Link reset, headset goes offline (seen at `0613`, `0685`) | ⛔ |
 
 ### Feature 4: listening and calls (`08xx`)
@@ -47,7 +48,7 @@ Framing: GAIA v3, `FF 03 | len | vendor | command | payload`. Command = `feature
 |---|---|---|
 | `0800` | Codec in use | ✅ |
 | `0880` / `089A` | Audio stream on/off, sample-rate notifications | ✅ |
-| `0801` / `0802` | Voice prompts mode (`02` = voice prompts) | ✅ |
+| `0801` / `0802` | Tones and voice prompts: `00` off, `01` tones only, `02` tones and voice (Smart Control's m4.json via Ariazonaa; `02` read 8 Nov 2026) | ✅ |
 | `0803` / `0804` | Sound mode u16: `00 01` normal, `00 02` Speech Clarity. **Refused while Hi-Res is on** (`0405 [00]`): `0803 [00 02]` -> error `83` (T39, Nokia run); with Hi-Res off it works. Writing the value it already has -> error `80` | ✅ |
 | `0805` / `0806` | Transparency during calls 0-4 (0 = off) | ✅ |
 | `0807` | Prompt language, read only | 🟡 |
@@ -85,13 +86,15 @@ Presets are app-side (no preset command). Smart Control's 8 presets: see `androi
 ### Feature 10: connections (`14xx`)
 | Command | Meaning | Status |
 |---|---|---|
-| `1401 [index]` | Paired device list (returns device names: privacy) | 🟡 |
-| `1402 [index]` | Connect a device (seen from Smart Control) | ✅ |
+| `1400` | Number of paired devices, u16 (`00 03` on 8 Nov 2026). Read it before any `1401` | ✅ |
+| `1401 [index]` | Paired device entry `[index, priority, connected 0/1, name]` (device names: privacy, hidden in logs). Never ask past the `1400` count | ✅ |
+| `1402 [index]` | Connect a device (seen from Smart Control). In the PC catalogue since Windows app 0.2.2 | ✅ |
 | `1403 [index]` | Disconnect a device, pairing kept (T19). Blocked anyway | ⛔ |
 | `1405` | "Delete entry" (old app name). Smart Control sent it once in capture 2. May remove a pairing | ⛔ |
 | `1406` | Delete pairing / write rejected | ⛔ |
-| `1407` | Not a restart flag: `01` through Hi-Res toggles and a restart (T21), then `00` after a guard power-off + button (T35). Not stable, meaning unknown. Read only | ❓ |
-| `1409` (reads `02`), `140B` (6 zero bytes), `1400`, `1404` | Unknown | ❓ |
+| `1407` | Index of the device that asks (Ariazonaa). 8 Nov 2026 it read `01` = this PC's `1401` entry, which also explains the 01/00 of T21/T35 (different devices asked). Read only | ✅ |
+| `1409` (reads `02`) | Most connections at once (Ariazonaa) | 🟡 |
+| `140B` (6 zero bytes), `1404` | Unknown (`1404 [index]` = connected? per Ariazonaa) | ❓ |
 | `1484` | Connection notification | ✅ |
 | `1500` | Rename device (blocked in the PC client) | ⛔ |
 

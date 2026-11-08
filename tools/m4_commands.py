@@ -39,7 +39,7 @@ def _c(name, kind, feature_cmd, payload, source, status, get_for=None, notif=Non
 COMMANDS = {
     # ---- feature 0: system
     0x0007: _c("register notifications", "register", 0x0007,
-               [(("u8", 0x04, 0x04),), (("u8", 0x08, 0x08),), (("u8", 0x0D, 0x0D),)],
+               [(("u8", 0x03, 0x03),), (("u8", 0x04, 0x04),), (("u8", 0x08, 0x08),), (("u8", 0x0D, 0x0D),)],
                "capture2", "confirmed"),
     # ---- feature 2: on-head / device
     0x0400: _c("on-head detection set", "set", 0x0400, BOOL, "capture2", "confirmed", get_for=0x0401),
@@ -88,8 +88,13 @@ COMMANDS = {
     0x1201: _c("firmware get", "get", 0x1201, EMPTY, "capture1", "confirmed"),
     0x1206: _c("model get", "get", 0x1206, EMPTY, "capture1", "confirmed"),
     # ---- feature 10: device list. 1401 returns device names: private, never in snapshot.
+    # 1400 / 1401 formats from Ariazonaa/momentum4-control (MIT, fw 3.37.3 + 3.38.3): count u16;
+    # entry [index, priority, connected 0/1, name]. Read the count first, never an index past it.
+    0x1400: _c("paired device count get", "get", 0x1400, EMPTY, "ariazonaa", "claimed"),
     0x1401: _c("paired device name get", "get", 0x1401, [(("u8", 0, 7),)], "omarchy", "claimed"),
-    0x1407: _c("audio mode change pending get", "get", 0x1407, EMPTY, "omarchy", "claimed"),
+    0x1402: _c("paired device connect [idx]", "action", 0x1402, [(("u8", 0, 7),)], "capture2", "confirmed"),
+    # 1407 = index of the device that asks (Ariazonaa); 8 Nov 2026 it read 01 = this PC's 1401 entry.
+    0x1407: _c("own device index get", "get", 0x1407, EMPTY, "omarchy", "claimed"),
     # ---- feature 11: MMI
     0x1606: _c("touch controls set (0 = on)", "set", 0x1606, BOOL, "capture3", "confirmed", get_for=0x1607),
     0x1607: _c("touch controls get (0 = on)", "get", 0x1607, EMPTY, "capture3", "confirmed", notif=0x1687),
@@ -116,7 +121,7 @@ SEEN_LABELS = {
     0x2001: "feature 16, seen at connect", 0x2003: "feature 16, seen at connect",
     0x2005: "feature 16, seen at connect", 0x2007: "feature 16, seen at connect",
     0x2081: "feature 16 notif", 0x2601: "feature 19, seen at connect",
-    0x1402: "device connect [idx]", 0x1405: "BLOCKED device delete/disconnect [idx]",
+    0x1405: "BLOCKED device delete/disconnect [idx]",
     0x1403: "BLOCKED device disconnect/delete [idx] (T19: SCP disconnect, pairing kept; omarchy: lost a pairing)", 0x1484: "device list status notif [idx, state]", 0x1406: "BLOCKED delete pairing list",
     0x0040: "BLOCKED factory reset",
     0x1800: "feature 12 SET seen from SCP (auto-pause in transparency?), unconfirmed",

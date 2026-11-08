@@ -1,23 +1,45 @@
 # MOMENTUM 4 on Windows
 
 Two tools live here:
-- **M4 Control** (`m4_app.py` + `ui/index.html`): the Windows app. Noise control, EQ with presets, the listening and call settings, and Power off.
+- **M4 Control** (`M4Control.exe`, or `m4_app.py` + `ui/index.html`): the Windows app. Noise control, EQ with presets, the listening and call settings, connections, a tray panel, and Power off.
+- **`m4ctl`** (`m4ctl.exe` or `m4ctl.py`): the same controls from the command line, for hotkeys and scripts.
 - **`gaia_client.py`**: the command-line client used for testing (below).
 
-## M4 Control (0.2.1)
+## M4 Control (0.2.2)
 
-Same look and pages as the Android app (design v4): dot battery, noise control with round buttons, tiles, Poweramp-style EQ faders with the dot-matrix curve and preset sheet, Listening and Device pages, Power off. Follows the Windows light/dark setting. Not in it yet: automatic power-off when idle (the guard), which is still Android only.
+Same look and pages as the Android app (design v4): dot battery, noise control with round buttons (Adaptive, Custom, Transparency, Off), tiles, Poweramp-style EQ faders with the dot-matrix curve and preset sheet, Listening and Device pages, Power off. Follows the Windows light/dark setting. Not in it yet: automatic power-off when idle (the guard), which is still Android only.
 
-Setup:
-1. Install Python 3.9 or newer from python.org (tick "Add python.exe to PATH"). Nothing else to install.
-2. Pair the headphones with this PC in Windows Settings > Bluetooth.
-3. Double-click `start-m4-app.bat` (or run `pythonw m4_app.py`).
+Setup with the exe (no Python needed):
+1. Pair the headphones with this PC in Windows Settings > Bluetooth.
+2. Download `M4Control.exe` (and `m4ctl.exe` if you want the command line) and put them in a folder of your own, for example `%LOCALAPPDATA%\Programs\M4Control`.
+3. Double-click `M4Control.exe`. It isn't signed, so Windows SmartScreen asks once: **More info** > **Run anyway**. Check the file against `SHA256SUMS` first if you like (`certutil -hashfile M4Control.exe SHA256`).
+
+Or from source: install Python 3.9+ from python.org, then double-click `start-m4-app.bat` (or `pythonw m4_app.py`). To build the exes yourself: `python -m pip install pyinstaller==6.11.1` then `python build_exe.py` (CI does the same, `.github/workflows/windows-app.yml`).
 
 It opens in its own Edge window (Edge comes with Windows; Chrome or the default browser if Edge is missing), finds the paired MOMENTUM 4 and connects. Your choice and your own EQ presets are saved in `%LOCALAPPDATA%\M4Control\settings.json`, logs in `%LOCALAPPDATA%\M4Control\logs` (no Bluetooth address in them). **Device > Copy report** copies a report for a GitHub issue.
 
-**Tray icon** (the Windows version of the Android widgets and tiles): click the ear icon next to the clock for noise Adaptive / Custom / Off and previous / next EQ preset. The icon shows the noise mode, like the Android tile. If the window is open and connected, the tray sends through that link; otherwise it connects, sends and disconnects (about 1 s), so nothing holds the headphones. If they're off you get a notification. Closing the window releases the headphones after 10 s and the app stays in the tray; **Quit M4 Control** in the tray menu ends it. **Start with Windows** in the same menu starts it in the tray at sign-in (`m4_app.py --tray`). Power off is not in the tray on purpose: it stays a button in the window, after a confirm.
+**Tray icon** (the Windows version of the Android widgets and tiles): left-click the ear icon next to the clock for a small panel with the battery, the four noise modes and previous / next EQ preset; right-click for the same as a menu; double-click for the window. The icon shows the noise mode, like the Android tile. If the window is open and connected, the tray sends through that link; otherwise it connects, sends and disconnects (about 1 s), so nothing holds the headphones. If they're off you get a notification. Closing the window releases the headphones after 10 s and the app stays in the tray; **Quit M4 Control** in the tray menu ends it. **Start with Windows** in the same menu starts it in the tray at sign-in (`m4_app.py --tray`). Power off is not in the tray on purpose: it stays a button in the window, after a confirm.
 
 How it works: `m4_app.py` owns the Bluetooth link (same code as the command-line client) and serves the window (`ui/index.html`) on 127.0.0.1 only, behind a random token checked on every request, with Host and Origin checks. No internet, nothing listens on the network. `m4_logic.py` builds every frame and only allows documented commands; Power off is the one exception, from its button only, after a confirm.
+
+**New in 0.2.2** (ideas from other MOMENTUM 4 projects, all with documented commands):
+- **Transparency** as a fourth noise mode: Custom at full transparency (level 100). Picking Custom again goes back to your own Custom level.
+- **Tones and voice prompts**: Off, Tones, or Tones and voice (Listening page).
+- **Connections** (Device page): the devices paired with the headphones, which are connected, which one is this PC. Tap one to connect it. The headphones keep two at a time. Their names stay on this PC: the log and Copy report hide them.
+- **Charging** shows next to the status.
+- **Reconnects on its own** every 20 s while the window is open, after the headphones went out of reach or were off. Not after you press Disconnect or Power off.
+- **m4ctl** for hotkeys and scripts. Through the app when it runs, else it connects itself (about 2 s):
+  ```
+  m4ctl status
+  m4ctl battery
+  m4ctl noise adaptive|custom|transparency|off|next
+  m4ctl level 0-100
+  m4ctl eq next|prev|Rock
+  m4ctl prompts off|tones|voice
+  ```
+  No power off from the command line, on purpose.
+
+Not here on purpose: rename the headphones and disconnect a device. Both are blocked (`1500`, `1403`): on some firmware they wiped a pairing.
 
 Good to know:
 - The app talks to the headphones over the PC's own Bluetooth. A Sennheiser BTD 600/700 USB dongle only carries audio, so the PC also needs its own Bluetooth paired with the M4. Not tested yet with a dongle.
@@ -25,7 +47,7 @@ Good to know:
 - The phone app's widgets open their own short link to the headphones, which is why they work even when the phone isn't playing to them.
 - If the guard is on in the Android app, it only sees the phone. It can switch the headphones off while you listen on the PC.
 
-Tested 8 Nov 2026 on Windows 10, Python 3.12, M4 fw 3.38.3: connect and read all; presets (Rock, Movie, Flat), a fader drag and Smart pause changed and read back, then restored. Power off: the confirm opens, not pressed. Tray (0.2.1): one-shot with nothing linked set EQ Rock (1.1 s) and noise Custom (0.9 s), read back correct; then Adaptive and Neutral through the open link. Unit tests: `python -m unittest discover -p "test_*.py"`.
+Tested 8 Nov 2026 on Windows 10, Python 3.12, M4 fw 3.38.3: connect and read all; presets (Rock, Movie, Flat), a fader drag and Smart pause changed and read back, then restored. Power off: the confirm opens, not pressed. Tray (0.2.1): one-shot with nothing linked set EQ Rock (1.1 s) and noise Custom (0.9 s), read back correct; then Adaptive and Neutral through the open link. 0.2.2: Transparency (level read back 100, then 0), tones/voice prompts read, the connections list (3 devices, this PC = `1407`), charging read, m4ctl through the app and on its own (status 2.7 s, EQ Rock then Neutral), `m4ctl poweroff` refused; `M4Control.exe` and `m4ctl.exe` built with PyInstaller 6.11.1 and run on this PC. Unit tests: `python -m unittest discover -p "test_*.py"`.
 
 # MOMENTUM 4 GAIA client (PC)
 

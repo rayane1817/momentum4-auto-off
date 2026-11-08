@@ -1,0 +1,51 @@
+name: Windows app
+
+# Builds M4Control.exe and m4ctl.exe (PyInstaller, one file each) on Windows after the unit tests,
+# and keeps them as a workflow artifact with their SHA256SUMS. Publishing a release stays manual.
+
+on:
+  pull_request:
+    paths:
+      - 'windows-client/**'
+      - 'tools/m4_commands.py'
+      - '.github/workflows/windows-app.yml'
+  push:
+    branches: [main, 'claude/windows-app-v0']
+    paths:
+      - 'windows-client/**'
+      - 'tools/m4_commands.py'
+      - '.github/workflows/windows-app.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Unit tests (on Windows)
+        run: python -m unittest discover -s windows-client -p "test_*.py"
+
+      - name: Blocklist parity (app vs PC)
+        run: python tools/blocklist_parity_test.py
+
+      - name: Build the exes
+        run: |
+          python -m pip install --disable-pip-version-check pyinstaller==6.11.1
+          python windows-client/build_exe.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: M4Control-windows-${{ github.sha }}
+          path: |
+            windows-client/dist/M4Control.exe
+            windows-client/dist/m4ctl.exe
+            windows-client/dist/SHA256SUMS
+          if-no-files-found: error

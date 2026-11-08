@@ -38,13 +38,14 @@ G = L.G
 M4 = L.M4
 
 APP_DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "M4Control")
-UI_FILE = os.path.join(HERE, "ui", "index.html")
+UI_FILE = os.path.join(getattr(sys, "_MEIPASS", HERE), "ui", "index.html")   # _MEIPASS: inside the exe
 BATTERY_POLL_S = 120
 ADDR_RE = re.compile(r"(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}")
 LOG_KEEP = 400
 ONESHOT_ATTEMPTS = 2           # tray send with no open link: like the Android tile (TILE_ATTEMPTS)
 ONESHOT_TIMEOUT_S = 6.0
 FRAME_GAP_S, SETTLE_S, RETRY_GAP_S = 0.06, 0.4, 0.8   # Remote.java
+RECONNECT_S = 20               # auto-reconnect interval while a window is open
 
 
 def scrub(text):
@@ -63,6 +64,12 @@ class UiLogger(G.Logger):
         self.sink(line)
 
     def rx(self, frame):
+        if frame.vendor == L.SENN and frame.base == 0x1401 and len(frame.payload) > 3:
+            # paired device entries carry other people's device names: never in a log or report
+            p = frame.payload
+            self._w("<- %04X:%04X [%02X %02X %02X] + %d name bytes, hidden  (%s)" % (
+                frame.vendor, frame.command, p[0], p[1], p[2], len(p) - 3, M4.label(frame.vendor, frame.command)))
+            return
         self._w("<- %s  (%s)" % (frame, M4.label(frame.vendor, frame.command)))
 
 
@@ -172,7 +179,7 @@ class Worker(threading.Thread):
             self.post(("frame", f))
         if time.monotonic() - self.last_poll > BATTERY_POLL_S:
             self.last_poll = time.monotonic()
-            self._send_all([L.battery_frame()])
+            self._send_all(L.battery_frames())
 
     def _drop(self, text):
         self._close()
@@ -212,6 +219,8 @@ class Core:
         self.tray = None             # m4_tray.Tray, set by main() on Windows
         self.quick_busy = False      # a tray send is on its way
         self.idle_dropped = False    # link released because no window is open (tray mode)
+        self.user_disconnected = False   # pressed Disconnect: no auto-reconnect until Connect
+        self.last_attempt = 0.0
         self.rescan(devices)
 
     # ----------------------------------------------------------- state
@@ -221,7 +230,7 @@ class Core:
         return dict(conn="disconnected", msg="Not connected", battery=None, model=None, firmware=None,
                     hardware=None, timer=None, anc_on=None, adaptive_on=None, level=0, anti_wind=None,
                     eq=[0, 0, 0, 0, 0], toggles={t[0]: None for t in L.TOGGLES}, speech=None, call=None,
-                    poweroff_sent=False)
+                    poweroff_sent=False, charging=None, prompts=None, peers=[], own_index=None)
 
     def snapshot(self):
         with self.lock:
@@ -231,6 +240,7 @@ class Core:
             d["presets"] = {"builtin": [[n, list(g)] for n, g in L.BUILTIN_PRESETS],
                             "custom": [[n, list(g)] for n, g in sorted(self.custom.items())]}
             d["version"] = L.APP_VERSION
+            d["custom_level"] = self.custom_level()
             return d
 
     def subscribe(self):
@@ -292,7 +302,7 @@ class Core:
             elif item[0] == "oneshot":
                 _k, ok, (what, value) = item
                 self.quick_busy = False
-                if ok:
+                if ok and what in ("noise", "eq"):
                     self._remember(**{what: value})
                 else:
                     fail = "Can't reach %s. Are they on?" % self._device_name()
@@ -317,8 +327,12 @@ class Core:
                 s["msg"] = "Switched off. Press the button on the headphones to turn them on."
             elif name == "failed":
                 s["msg"] = "Couldn't connect. Are the headphones on and paired with this PC?"
+                if not self.user_disconnected:
+                    s["msg"] += " Trying again every %d s." % RECONNECT_S
             elif name == "dropped":
                 s["msg"] = "Disconnected. %s" % (text or "")
+                if not self.user_disconnected:
+                    s["msg"] += " Reconnecting in %d s." % RECONNECT_S
             else:
                 s["msg"] = "Not connected"
 
@@ -344,7 +358,7 @@ class Core:
         if s["conn"] != "connected":
             return
         if s["anc_on"] is False or (s["anc_on"] and s["adaptive_on"] is not None):
-            self._remember(noise=L.noise_mode_index(s["anc_on"], s["adaptive_on"]))
+            self._remember(noise=L.noise_mode_index(s["anc_on"], s["adaptive_on"], s["level"]))
         if not (self.eq_wait and time.monotonic() < self.eq_wait[0]):
             self._remember(eq=L.preset_name(s["eq"], self.custom))
 
@@ -352,13 +366,16 @@ class Core:
         with self.lock:
             w = self.settings.get("widget") or {}
             linked = self.s["conn"] == "connected"
-            return {"noise": w.get("noise") if w.get("noise") in (0, 1, 2) else None,
+            return {"noise": w.get("noise") if w.get("noise") in (0, 1, 2, 3) else None,
                     "eq": w.get("eq") if isinstance(w.get("eq"), str) else None,
-                    "battery": self.s["battery"] if linked else None, "busy": self.quick_busy}
+                    "battery": self.s["battery"] if linked else None,
+                    "charging": bool(self.s["charging"]) if linked else False,
+                    "linked": linked, "busy": self.quick_busy}
 
     def quick(self, what, value):
-        """A tray click: ("noise", 0-2) or ("eq", +1/-1). Through the open link, else a one-shot
-        connect, send, disconnect in the worker. Returns False if ignored or impossible."""
+        """A tray, panel or m4ctl action: ("noise", 0-3), ("eq", +1/-1 or a preset name),
+        ("level", 0-100) or ("prompts", 0-2). Through the open link, else a one-shot connect,
+        send, disconnect in the worker. Returns False if ignored or impossible."""
         fail = None
         with self.lock:
             if self.quick_busy:
@@ -366,26 +383,47 @@ class Core:
             linked = self.s["conn"] == "connected"
             if what == "noise":
                 mode = int(value)
-                if not 0 <= mode <= 2:
+                if not 0 <= mode <= 3:
                     raise ValueError("bad noise mode")
                 tag = ("noise", mode)
                 frames = L.noise_frames(mode, self.s["level"]) if linked else L.widget_noise_frames(mode)
             elif what == "eq":
-                current = (L.preset_name(self.s["eq"], self.custom) if linked
-                           else (self.settings.get("widget") or {}).get("eq"))
-                name, gains = L.step_preset(current, 1 if int(value) > 0 else -1, self.custom)
+                if isinstance(value, str):
+                    found = [(n, g) for n, g in L.preset_list(self.custom) if n.lower() == value.lower()]
+                    if not found:
+                        raise ValueError("no preset called %s" % value)
+                    name, gains = found[0]
+                else:
+                    current = (L.preset_name(self.s["eq"], self.custom) if linked
+                               else (self.settings.get("widget") or {}).get("eq"))
+                    name, gains = L.step_preset(current, 1 if int(value) > 0 else -1, self.custom)
                 tag = ("eq", name)
                 frames = L.eq_curve_frames(gains)
+            elif what == "level":
+                v = max(0, min(100, int(value)))
+                tag = ("level", v)
+                frames = L.level_frames(v)
+            elif what == "prompts":
+                v = int(value)
+                if not 0 <= v <= 2:
+                    raise ValueError("bad prompts mode")
+                tag = ("prompts", v)
+                frames = L.prompts_frames(v)
             else:
-                raise ValueError("unknown tray action")
+                raise ValueError("unknown quick action")
             if linked:
                 self.send(frames)
                 if what == "noise":
-                    self.s["anc_on"], self.s["adaptive_on"] = mode != 2, mode == 0
-                else:
+                    self._noise_state(mode)
+                elif what == "eq":
                     self.s["eq"] = list(gains)
                     self.eq_wait = (time.monotonic() + 1.0, list(gains))
-                self._remember(**{what: tag[1]})
+                elif what == "level":
+                    self.s["level"] = v
+                else:
+                    self.s["prompts"] = v
+                if what in ("noise", "eq"):
+                    self._remember(**{what: tag[1]})
             elif self.device_idx is None:
                 fail = "Open M4 Control and pick the headphones first."
             else:
@@ -413,7 +451,19 @@ class Core:
             linked = self.s["conn"] in ("connected", "connecting")
         if linked:
             self.log.note("window closed: link released, the tray icon stays")
-            self.handle({"action": "disconnect"})
+            self.handle({"action": "disconnect", "auto": True})
+
+    def maybe_reconnect(self, now=None):
+        """While a window is open: link again every RECONNECT_S after a drop or a failed connect
+        (headphones out of reach, switched on again). Not after Disconnect or Power off."""
+        now = time.monotonic() if now is None else now
+        with self.lock:
+            due = (self.s["conn"] == "disconnected" and not self.user_disconnected and not self.idle_dropped
+                   and not self.s["poweroff_sent"] and now - self.last_attempt >= RECONNECT_S)
+        if due and self.should_autoconnect():
+            self.handle({"action": "connect"})
+            return True
+        return False
 
     def apply(self, d):
         s = self.s
@@ -424,9 +474,16 @@ class Core:
                 self.send([L.req(0x0804)])           # read the real sound mode back (T39)
             return
         for key in ("battery", "model", "firmware", "hardware", "timer", "anc_on", "adaptive_on",
-                    "level", "anti_wind", "speech"):
+                    "level", "anti_wind", "speech", "charging", "prompts", "own_index"):
             if key in d:
                 s[key] = d[key]
+        if "peer_count" in d:                        # then read each entry, never past the count
+            s["peers"] = [None] * min(d["peer_count"], L.MAX_PEERS)
+            self.send(L.peer_frames(len(s["peers"])))
+        if "peer" in d:
+            idx, connected, name = d["peer"]
+            if 0 <= idx < len(s["peers"]):
+                s["peers"][idx] = {"name": name or "Unnamed device", "connected": connected}
         if "call_transparency" in d:
             s["call"] = d["call_transparency"]
         if "eq" in d:
@@ -453,6 +510,7 @@ class Core:
         try:
             with self.lock:
                 res = self._handle(a if isinstance(a, dict) else {})
+                self._learn()
         except (L.Refused, ValueError, TypeError, KeyError, IndexError) as e:
             self.log.note("action refused: %s" % e)
             res = {"ok": False, "error": str(e)}
@@ -470,11 +528,22 @@ class Core:
             self.settings["address"] = self.devices[self.device_idx][1]
             self._save_settings()
             s["poweroff_sent"] = False
+            self.user_disconnected = False
+            self.last_attempt = time.monotonic()
             self.worker.put("connect", self.devices[self.device_idx][1])
             return {"ok": True}
         if act == "disconnect":
+            self.user_disconnected = a.get("auto") is not True
             self.worker.put("disconnect")
             return {"ok": True}
+        if act == "quick":                           # tray panel and m4ctl: link or one-shot
+            ok = self.quick(str(a["what"]), a["value"])
+            return {"ok": ok, "linked": s["conn"] == "connected"} if ok else {"ok": False, "error": "Busy, or no headphones picked."}
+        if act == "status":
+            snap = self.tray_state()
+            snap.update(model=s["model"], firmware=s["firmware"], level=s["level"], prompts=s["prompts"],
+                        conn=s["conn"])
+            return {"ok": True, "status": snap}
         if act == "rescan":
             self.rescan()
             return {"ok": True}
@@ -502,13 +571,32 @@ class Core:
             return {"ok": False, "error": "Connect first."}
         if act == "noise":
             mode = int(a["mode"])
-            if not 0 <= mode <= 2:
+            if not 0 <= mode <= 3:
                 raise ValueError("bad noise mode")
+            if mode == 1 and s["level"] >= L.TRANSPARENCY_LEVEL:
+                s["level"] = self.custom_level()          # back from Transparency: your Custom level
             self.send(L.noise_frames(mode, s["level"]))
-            s["anc_on"], s["adaptive_on"] = mode != 2, mode == 0
+            self._noise_state(mode)
+        elif act == "prompts":
+            v = int(a["value"])
+            if not 0 <= v <= 2:
+                raise ValueError("bad prompts mode")
+            self.send(L.prompts_frames(v))
+            s["prompts"] = v
+        elif act == "peer":
+            idx = int(a["index"])
+            if not 0 <= idx < len(s["peers"]):
+                raise ValueError("no such device")
+            self.send([L.peer_connect_frame(idx)])
+            self.log.note("asked the headphones to connect paired device %d" % idx)
+            threading.Timer(3.0, self._reread_peers).start()
+        elif act == "peers":
+            self._reread_peers()
         elif act == "level":
             s["level"] = max(0, min(100, int(a["value"])))
             self.send(L.level_frames(s["level"]))
+            if s["level"] < L.TRANSPARENCY_LEVEL:
+                self._remember(custom_level=s["level"])
         elif act == "wind":
             idx = int(a["index"])
             self.send([L.anti_wind_frame(idx)])
@@ -545,6 +633,20 @@ class Core:
         else:
             return {"ok": False, "error": "unknown action"}
         return {"ok": True}
+
+    def _noise_state(self, mode):
+        s = self.s
+        s["anc_on"], s["adaptive_on"] = mode != 2, mode == 0
+        if mode == 3:
+            s["level"] = L.TRANSPARENCY_LEVEL
+
+    def custom_level(self):
+        v = (self.settings.get("widget") or {}).get("custom_level")
+        return v if isinstance(v, int) and 0 <= v < L.TRANSPARENCY_LEVEL else 50
+
+    def _reread_peers(self):
+        with self.lock:
+            self.send([L.peer_count_frame()])
 
     def _store_presets(self):
         self.settings["presets"] = {k: list(v) for k, v in self.custom.items()}
@@ -729,6 +831,7 @@ def lifecycle(core, server, started, tray=None):
             if not seen and tray:
                 core.window_back()
             seen, idle_since = True, None
+            core.maybe_reconnect(now)
             continue
         if seen:
             idle_since = idle_since or now

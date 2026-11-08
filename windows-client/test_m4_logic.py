@@ -33,7 +33,10 @@ def every_app_frame():
         out += L.toggle_frames(key, True) + L.toggle_frames(key, False)
     out += L.speech_frames(True) + L.speech_frames(False)
     out += [f for lv in range(5) for f in L.call_transparency_frames(lv)]
-    out.append(L.battery_frame())
+    out += L.battery_frames() + L.transparency_frames()
+    out += [f for m in range(4) for f in L.widget_noise_frames(m)]
+    out += [f for v in range(3) for f in L.prompts_frames(v)]
+    out += [L.peer_count_frame()] + L.peer_frames(8) + [L.peer_connect_frame(i) for i in range(8)]
     return out
 
 
@@ -96,10 +99,23 @@ class FrameTest(unittest.TestCase):
         self.assertEqual(hx(L.speech_frames(True))[0], "FF 03 00 02 04 95 08 03 00 02")
         self.assertEqual(hx(L.call_transparency_frames(9))[0], "FF 03 00 01 04 95 08 05 04")
 
+    def test_transparency_prompts_and_peers(self):
+        self.assertEqual(hx(L.noise_frames(3, 20)), ["FF 03 00 02 04 95 1A 00 03 00", "FF 03 00 01 04 95 1A 04 01",
+                                                     "FF 03 00 01 04 95 1A 02 64"])
+        self.assertEqual(hx(L.widget_noise_frames(3)), hx(L.transparency_frames()))
+        self.assertEqual(hx(L.prompts_frames(1)), ["FF 03 00 01 04 95 08 01 01", "FF 03 00 00 04 95 08 02"])
+        self.assertEqual(hx(L.peer_frames(3))[-1], "FF 03 00 01 04 95 14 01 02")
+        self.assertEqual(len(L.peer_frames(20)), 8)                        # never past index 7
+        self.assertEqual(G.hexstr(L.peer_connect_frame(2)), "FF 03 00 01 04 95 14 02 02")
+        for bad in ((0x1402, 8), (0x0801, 3), (0x1403, 0)):
+            with self.assertRaises(L.Refused):
+                L.req(*bad)
+
     def test_connect_registers_then_reads(self):
         f = hx(L.connect_frames())
-        self.assertEqual(f[:3], ["FF 03 00 01 04 95 00 07 0D", "FF 03 00 01 04 95 00 07 08",
-                                 "FF 03 00 01 04 95 00 07 04"])
+        self.assertEqual(f[:4], ["FF 03 00 01 04 95 00 07 0D", "FF 03 00 01 04 95 00 07 08",
+                                 "FF 03 00 01 04 95 00 07 04", "FF 03 00 01 04 95 00 07 03"])
+        self.assertIn("FF 03 00 00 04 95 14 00", f)                  # the count, not the entries
         self.assertIn("FF 03 00 01 04 95 10 03 00", f)
 
 
@@ -133,7 +149,17 @@ class DecodeTest(unittest.TestCase):
         self.assertEqual(L.decode(frame(0x0983, [0x83])), {"error": (0x0803, 0x83)})
         self.assertEqual(L.decode(frame(0x0703, [50], vendor=0x001D)), {})
 
+    def test_charging_prompts_peers(self):
+        self.assertEqual(L.decode(frame(0x0702, [0, 0])), {"charging": False})          # as read 8 Nov
+        self.assertEqual(L.decode(frame(0x0682, [1])), {"charging": True})
+        self.assertEqual(L.decode(frame(0x0902, [2])), {"prompts": 2})
+        self.assertEqual(L.decode(frame(0x1500, [0, 3])), {"peer_count": 3})
+        self.assertEqual(L.decode(frame(0x1501, [1, 0, 1] + list(b"Laptop\0"))), {"peer": (1, True, "Laptop")})
+        self.assertEqual(L.decode(frame(0x1507, [1])), {"own_index": 1})
+
     def test_noise_index(self):
+        self.assertEqual(L.noise_mode_index(True, False, 100), 3)
+        self.assertEqual(L.noise_mode_index(True, False, 99), 1)
         self.assertEqual(L.noise_mode_index(True, True), 0)
         self.assertEqual(L.noise_mode_index(True, False), 1)
         self.assertEqual(L.noise_mode_index(False, True), 2)

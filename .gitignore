@@ -4,3 +4,5 @@ logs/
 *.cfa
 btsnoop*
 windows-client/m4_addr.txt
+windows-client/build/
+windows-client/dist/

@@ -17,6 +17,8 @@ Counted wishes (one per user): Windows app 2 (Hot-Extent-1620, TheUnAmericanGenr
 
 ### Windows (handled in the `claude/windows-app-v0` session)
 - Two users asked. An early Windows app was built in this session: `windows-client/m4_app.py` (see `windows-client/README.md`). Not part of the Android release.
+- 8 Nov 2026, other MOMENTUM 4 projects on GitHub (all MIT): **Ariazonaa/momentum4-control** (WinUI 3 Windows app + Linux, signed-off on fw 3.37.3 and 3.38.3: tray quick panel, installer exe, `m4ctl` CLI, multipoint, rename, Windows battery fallback, auto-reconnect; no true power-off, its auto-off is the firmware timer), **f3Y0/momentum4-control** (Linux/KDE tray: ANC/transparency slider, bass boost), **takaok5/momentum4-audio-fix** (a guide, not an app: third-party A2DP driver for aptX HD/LDAC 24-bit and HeSuVi 7.1 on Windows 11). Our Windows app 0.2.2 took over: tray panel, Transparency button, tones/prompts, connections list + connect, charging, auto-reconnect, `m4ctl`, a PyInstaller exe. Left out on purpose: rename (`1500`) and disconnect (`1403`), both blocked. Our one feature nobody else has: the true power-off `0605` and the guard.
+- Windows 11 widget board: wanted (Ryane, 8 Nov 2026), not built. It needs a C# widget provider in an MSIX package with a certificate, and a Windows 11 PC to test; the development laptop runs Windows 10. The tray panel covers the same controls until then.
 - BTD 600 note for the README: the BTD 600 is an audio transmitter; the Windows app talks to the M4 over the PC's own Bluetooth, not through the dongle. The PC must also be paired with the M4. The M4 has two multipoint slots, so phone + BTD 600 + PC Bluetooth may be one too many. Needs a test with a BTD 600 (Ryane has none).
 
 ### Android
