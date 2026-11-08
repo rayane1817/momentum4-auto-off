@@ -4,8 +4,11 @@
 The window is ui/index.html (design v4, the Android app's look) in an Edge app window.
 This script serves it on 127.0.0.1 only, behind a random token, and owns the Bluetooth link
 (GAIA over RFCOMM, the same transport as gaia_client.py). Stock Python 3.9+, no packages, no
-internet. Start with start-m4-app.bat or `pythonw m4_app.py`. It quits about 10 s after its
-window closes.
+internet. Start with start-m4-app.bat or `pythonw m4_app.py` (`--tray` starts it without a window).
+
+The tray icon (m4_tray.py) is the Windows version of the Android widgets: noise mode and EQ preset
+from the taskbar. With the tray, closing the window releases the headset after 10 s and the app
+stays in the tray; "Quit M4 Control" ends it. Without a tray it quits 10 s after the window closes.
 
 Every frame comes from m4_logic (documented commands only). Logs:
 %LOCALAPPDATA%\\M4Control\\logs, with no Bluetooth address in them.
@@ -29,6 +32,7 @@ import webbrowser
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import m4_logic as L  # noqa: E402
+import m4_tray as T  # noqa: E402
 
 G = L.G
 M4 = L.M4
@@ -38,6 +42,9 @@ UI_FILE = os.path.join(HERE, "ui", "index.html")
 BATTERY_POLL_S = 120
 ADDR_RE = re.compile(r"(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}")
 LOG_KEEP = 400
+ONESHOT_ATTEMPTS = 2           # tray send with no open link: like the Android tile (TILE_ATTEMPTS)
+ONESHOT_TIMEOUT_S = 6.0
+FRAME_GAP_S, SETTLE_S, RETRY_GAP_S = 0.06, 0.4, 0.8   # Remote.java
 
 
 def scrub(text):
@@ -61,7 +68,8 @@ class UiLogger(G.Logger):
 
 class Worker(threading.Thread):
     """Owns the RFCOMM link. Items: ("connect", addr), ("disconnect",), ("send", [frames]),
-    ("poweroff",), ("quit",). Posts ("state", name, text) and ("frame", Frame)."""
+    ("oneshot", addr, [frames], tag), ("poweroff",), ("quit",).
+    Posts ("state", name, text), ("frame", Frame) and ("oneshot", ok, tag)."""
 
     def __init__(self, post, log):
         super().__init__(daemon=True, name="m4-link")
@@ -112,6 +120,17 @@ class Worker(threading.Thread):
             self.post(("state", "disconnected", None))
         elif kind == "send":
             self._send_all(item[1])
+        elif kind == "oneshot":
+            _k, addr, frames, tag = item
+            ok = False
+            try:
+                if self.link:                              # the app is linked: send through it
+                    self._send_all(frames)
+                    ok = self.link is not None
+                else:
+                    ok = self._one_shot(addr, frames)
+            finally:                                       # always, so the tray never stays busy
+                self.post(("oneshot", ok, tag))
         elif kind == "poweroff":
             if self.link and self.link.send(L.POWER_OFF):
                 self.post(("state", "poweroff_sent", None))
@@ -122,6 +141,27 @@ class Worker(threading.Thread):
             if not self.link:
                 return
             self.link.send(f)
+
+    def _one_shot(self, addr, frames):
+        """Connect, send, let the headset apply, disconnect (Remote.java). Nothing stays linked."""
+        for attempt in range(ONESHOT_ATTEMPTS):
+            link = G.Link(addr, self.log)
+            try:
+                if link.connect(timeout=ONESHOT_TIMEOUT_S):
+                    for f in frames:
+                        if not link.send(f):
+                            return False
+                        time.sleep(FRAME_GAP_S)
+                    time.sleep(SETTLE_S)
+                    return True
+            except OSError as e:
+                self.log.note("tray send: %s" % e)
+            finally:
+                link.close()
+            if attempt + 1 < ONESHOT_ATTEMPTS:
+                time.sleep(RETRY_GAP_S)
+        self.log.note("tray send: headphones off or out of reach")
+        return False
 
     def _pump(self):
         frames = self.link.read_frames(0.1)
@@ -169,6 +209,9 @@ class Core:
             self.worker.start()
         self.devices, self.device_idx = [], None
         self.eq_wait = None          # (deadline, curve) after an EQ write from the page
+        self.tray = None             # m4_tray.Tray, set by main() on Windows
+        self.quick_busy = False      # a tray send is on its way
+        self.idle_dropped = False    # link released because no window is open (tray mode)
         self.rescan(devices)
 
     # ----------------------------------------------------------- state
@@ -210,6 +253,8 @@ class Core:
         with self.lock:
             for q in self.clients:
                 q.put(("state", payload))
+        if self.tray:
+            self.tray.refresh()
 
     def _on_log(self, line):
         line = scrub(line)
@@ -238,11 +283,22 @@ class Core:
     # ---------------------------------------------------- from the worker
 
     def on_worker(self, item):
+        fail = None
         with self.lock:
             if item[0] == "frame":
                 self.apply(L.decode(item[1]))
             elif item[0] == "state":
                 self._state(item[1], item[2])
+            elif item[0] == "oneshot":
+                _k, ok, (what, value) = item
+                self.quick_busy = False
+                if ok:
+                    self._remember(**{what: value})
+                else:
+                    fail = "Can't reach %s. Are they on?" % self._device_name()
+            self._learn()
+        if fail and self.tray:
+            self.tray.balloon("M4 Control", fail)
         self.broadcast()
 
     def _state(self, name, text):
@@ -265,6 +321,99 @@ class Core:
                 s["msg"] = "Disconnected. %s" % (text or "")
             else:
                 s["msg"] = "Not connected"
+
+    # ------------------------------------------------- tray (the widgets)
+
+    def _device_name(self):
+        return self.devices[self.device_idx][0] if self.device_idx is not None else "the headphones"
+
+    def _remember(self, **kw):
+        """Last noise mode and EQ preset name, for the tray when nothing is linked (Widgets prefs)."""
+        w = self.settings.setdefault("widget", {})
+        changed = {k: v for k, v in kw.items() if w.get(k) != v}
+        if changed:
+            w.update(changed)
+            try:
+                self._save_settings()
+            except OSError:
+                pass
+
+    def _learn(self):
+        """While linked, what the headset reports is what the tray shows."""
+        s = self.s
+        if s["conn"] != "connected":
+            return
+        if s["anc_on"] is False or (s["anc_on"] and s["adaptive_on"] is not None):
+            self._remember(noise=L.noise_mode_index(s["anc_on"], s["adaptive_on"]))
+        if not (self.eq_wait and time.monotonic() < self.eq_wait[0]):
+            self._remember(eq=L.preset_name(s["eq"], self.custom))
+
+    def tray_state(self):
+        with self.lock:
+            w = self.settings.get("widget") or {}
+            linked = self.s["conn"] == "connected"
+            return {"noise": w.get("noise") if w.get("noise") in (0, 1, 2) else None,
+                    "eq": w.get("eq") if isinstance(w.get("eq"), str) else None,
+                    "battery": self.s["battery"] if linked else None, "busy": self.quick_busy}
+
+    def quick(self, what, value):
+        """A tray click: ("noise", 0-2) or ("eq", +1/-1). Through the open link, else a one-shot
+        connect, send, disconnect in the worker. Returns False if ignored or impossible."""
+        fail = None
+        with self.lock:
+            if self.quick_busy:
+                return False
+            linked = self.s["conn"] == "connected"
+            if what == "noise":
+                mode = int(value)
+                if not 0 <= mode <= 2:
+                    raise ValueError("bad noise mode")
+                tag = ("noise", mode)
+                frames = L.noise_frames(mode, self.s["level"]) if linked else L.widget_noise_frames(mode)
+            elif what == "eq":
+                current = (L.preset_name(self.s["eq"], self.custom) if linked
+                           else (self.settings.get("widget") or {}).get("eq"))
+                name, gains = L.step_preset(current, 1 if int(value) > 0 else -1, self.custom)
+                tag = ("eq", name)
+                frames = L.eq_curve_frames(gains)
+            else:
+                raise ValueError("unknown tray action")
+            if linked:
+                self.send(frames)
+                if what == "noise":
+                    self.s["anc_on"], self.s["adaptive_on"] = mode != 2, mode == 0
+                else:
+                    self.s["eq"] = list(gains)
+                    self.eq_wait = (time.monotonic() + 1.0, list(gains))
+                self._remember(**{what: tag[1]})
+            elif self.device_idx is None:
+                fail = "Open M4 Control and pick the headphones first."
+            else:
+                self.quick_busy = True
+                self.worker.put("oneshot", self.devices[self.device_idx][1], frames, tag)
+        if fail and self.tray:
+            self.tray.balloon("M4 Control", fail)
+        self.broadcast()
+        return fail is None
+
+    def window_back(self):
+        """A window opened after the link was released: link again."""
+        with self.lock:
+            again = self.idle_dropped and self.s["conn"] == "disconnected" and not self.s["poweroff_sent"]
+            self.idle_dropped = False
+        if again and self.should_autoconnect():
+            self.handle({"action": "connect"})
+
+    def window_gone(self):
+        """No window for a while (tray mode): release the headset, keep running in the tray."""
+        with self.lock:
+            if self.idle_dropped:
+                return
+            self.idle_dropped = True
+            linked = self.s["conn"] in ("connected", "connecting")
+        if linked:
+            self.log.note("window closed: link released, the tray icon stays")
+            self.handle({"action": "disconnect"})
 
     def apply(self, d):
         s = self.s
@@ -569,25 +718,64 @@ def running_instance():
         return None
 
 
-def lifecycle(core, server, started):
-    """Quit when the window has been gone for 10 s (or never opened within 90 s)."""
+def lifecycle(core, server, started, tray=None):
+    """When the window has been gone for 10 s (or never opened within 90 s): quit, or with the
+    tray, release the headset and keep running until "Quit" in the tray menu."""
     seen, idle_since = False, None
     while True:
         time.sleep(1)
         now = time.monotonic()
         if core.client_count():
+            if not seen and tray:
+                core.window_back()
             seen, idle_since = True, None
             continue
         if seen:
             idle_since = idle_since or now
-            if now - idle_since > 10:
-                break
-        elif now - started > 90:
+            gone = now - idle_since > 10
+        else:
+            gone = now - started > 90
+        if not gone:
+            continue
+        if not tray:
             break
+        core.window_gone()
+        seen, idle_since = False, None
     server.shutdown()
 
 
+def start_tray(core, server, url):
+    """The tray icon, or None if Windows has no tray for us (the app then quits with its window)."""
+    if not sys.platform.startswith("win"):
+        return None
+
+    def command(cid):
+        if cid == T.ID_OPEN:
+            open_window(url)
+        elif T.ID_NOISE <= cid <= T.ID_NOISE + 2:
+            core.quick("noise", cid - T.ID_NOISE)
+        elif cid in (T.ID_PREV, T.ID_NEXT):
+            core.quick("eq", 1 if cid == T.ID_NEXT else -1)
+        elif cid == T.ID_AUTOSTART:
+            on = not T.autostart_enabled()
+            T.set_autostart(on, os.path.abspath(__file__))
+            core.log.note("start with Windows: %s" % ("on" if on else "off"))
+        elif cid == T.ID_QUIT:
+            threading.Thread(target=server.shutdown, daemon=True).start()
+
+    tray = T.Tray(core.tray_state, command)
+    tray.start()
+    tray.ready.wait(5)
+    if not tray.ok:
+        core.log.note("no tray icon; the app quits when its window closes")
+        return None
+    core.tray = tray
+    return tray
+
+
 def main(open_ui=True):
+    if "--tray" in sys.argv[1:]:
+        open_ui = False
     url = running_instance() if sys.platform.startswith("win") else None
     if url:
         if open_ui:
@@ -601,14 +789,19 @@ def main(open_ui=True):
     os.makedirs(APP_DIR, exist_ok=True)
     with open(run_file, "w", encoding="utf-8") as f:
         json.dump({"port": server.server_port, "token": token}, f)
-    if core.should_autoconnect():
+    tray = start_tray(core, server, url)
+    if open_ui and core.should_autoconnect():
         core.handle({"action": "connect"})
+    else:
+        core.idle_dropped = True                 # tray only: link when a window opens
     if open_ui:
         open_window(url)
-    threading.Thread(target=lifecycle, args=(core, server, time.monotonic()), daemon=True).start()
+    threading.Thread(target=lifecycle, args=(core, server, time.monotonic(), tray), daemon=True).start()
     try:
         server.serve_forever()
     finally:
+        if tray:
+            tray.stop()
         core.close()
         try:
             os.remove(run_file)

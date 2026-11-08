@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gaia_client as G  # noqa: E402  (also puts ../tools on sys.path)
 import m4_commands as M4  # noqa: E402
 
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.2.1"
 SENN = G.SENNHEISER
 
 BANDS = ("63 Hz", "250 Hz", "1 kHz", "4 kHz", "8 kHz")
@@ -102,6 +102,16 @@ def noise_frames(mode, level):
     return [req(0x1A00, 3, 0), req(0x1A04, 0)]
 
 
+def widget_noise_frames(mode):
+    """One-shot noise change from the tray, same frames as the Android widget (Remote.noiseFrames):
+    Custom keeps the level the headset already has."""
+    if mode == 0:
+        return [req(0x1A04, 1), req(0x1A00, 3, 1)]
+    if mode == 1:
+        return [req(0x1A00, 3, 0), req(0x1A04, 1)]
+    return [req(0x1A00, 3, 0), req(0x1A04, 0)]
+
+
 def level_frames(level):
     return [req(0x1A02, max(0, min(100, int(level)))), req(0x1A03)]
 
@@ -148,6 +158,21 @@ def preset_name(gains10, custom=None):
         if tuple(curve) == g:
             return name
     return None
+
+
+def preset_list(custom=None):
+    """Built-ins, then your own presets by name: the order the tray steps through (as Android)."""
+    return [(n, tuple(g)) for n, g in BUILTIN_PRESETS] + [(n, tuple(g)) for n, g in sorted((custom or {}).items())]
+
+
+def step_preset(current, step, custom=None):
+    """(name, gains) of the preset after (step +1) or before (-1) the one named `current`.
+    Unknown or no current preset: the first (+1) or the last (-1), like the Android widget."""
+    all_ = preset_list(custom)
+    names = [n for n, _g in all_]
+    if current in names:
+        return all_[(names.index(current) + step) % len(all_)]
+    return all_[0] if step > 0 else all_[-1]
 
 
 def decode(f):

@@ -117,6 +117,110 @@ class CoreTest(unittest.TestCase):
         self.assertIn("XX:XX:XX:XX:XX:XX", text)
 
 
+class FakeTray:
+    def __init__(self):
+        self.balloons, self.refreshes = [], 0
+
+    def refresh(self):
+        self.refreshes += 1
+
+    def balloon(self, title, text):
+        self.balloons.append(text)
+
+
+class TrayTest(CoreTest):
+    """The tray = the Android widgets: one-shot when nothing is linked, the open link otherwise."""
+
+    def setUp(self):
+        super().setUp()
+        self.core.tray = self.tray = FakeTray()
+
+    def oneshots(self):
+        return [(it[1], [G.hexstr(f) for f in it[2]], it[3]) for it in self.w.items if it[0] == "oneshot"]
+
+    def test_unlinked_noise_is_a_one_shot_with_the_widget_frames(self):
+        self.assertTrue(self.core.quick("noise", 1))
+        self.assertEqual(self.oneshots(), [("00:00:00:00:00:02", ["FF 03 00 02 04 95 1A 00 03 00",
+                                                                   "FF 03 00 01 04 95 1A 04 01"], ("noise", 1))])
+        self.assertTrue(self.core.tray_state()["busy"])
+        self.assertFalse(self.core.quick("noise", 0))             # ignored while busy
+        self.core.on_worker(("oneshot", True, ("noise", 1)))
+        self.assertEqual((self.core.tray_state()["noise"], self.core.tray_state()["busy"]), (1, False))
+        with open(os.path.join(self.tmp.name, "settings.json"), encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["widget"]["noise"], 1)
+
+    def test_eq_steps_through_presets_and_wraps(self):
+        self.core.quick("eq", 1)                                  # nothing known: first preset
+        self.assertEqual(self.oneshots()[-1][2], ("eq", "Neutral"))
+        self.core.on_worker(("oneshot", True, ("eq", "Neutral")))
+        self.core.quick("eq", -1)                                 # before Neutral: the last one
+        self.assertEqual(self.oneshots()[-1][2], ("eq", "Jazz"))
+        self.assertEqual(self.oneshots()[-1][1][0], "FF 03 00 02 04 95 10 01 00 E0")   # -3.2 dB
+
+    def test_failure_tells_the_user_and_frees_the_tray(self):
+        self.core.quick("noise", 2)
+        self.core.on_worker(("oneshot", False, ("noise", 2)))
+        self.assertEqual(self.tray.balloons, ["Can't reach MOMENTUM 4. Are they on?"])
+        self.assertEqual(self.core.tray_state(), {"noise": None, "eq": None, "battery": None, "busy": False})
+
+    def test_linked_sends_through_the_link_and_follows_the_headset(self):
+        self.connect()
+        self.core.quick("noise", 0)
+        self.core.quick("eq", 1)                                  # live curve Neutral -> Rock
+        self.assertEqual(self.oneshots(), [])
+        self.assertEqual(self.w.sent()[:2], ["FF 03 00 01 04 95 1A 04 01", "FF 03 00 02 04 95 1A 00 03 01"])
+        self.assertEqual(self.core.tray_state()["eq"], "Rock")
+        self.core.eq_wait = None
+        self.core.on_worker(("frame", G.Frame(3, 0x0495, 0x1B05, bytes([0]))))   # ANC off elsewhere
+        self.core.on_worker(("frame", G.Frame(3, 0x0495, 0x1082, bytes([0, 0, 0x14, 0x14, 0xEC]))))
+        self.assertEqual((self.core.tray_state()["noise"], self.core.tray_state()["eq"]), (2, "Movie"))
+        self.assertGreater(self.tray.refreshes, 0)
+
+    def test_no_device_means_no_send(self):
+        self.core.device_idx = None
+        self.assertFalse(self.core.quick("noise", 0))
+        self.assertEqual(self.oneshots(), [])
+        self.assertTrue(self.tray.balloons)
+
+    def test_window_gone_releases_the_link_and_window_back_relinks(self):
+        self.connect()
+        self.core.window_gone()
+        self.core.window_gone()
+        self.assertEqual([it for it in self.w.items if it[0] == "disconnect"], [("disconnect",)])
+        self.core.on_worker(("state", "disconnected", None))
+        self.core.window_back()
+        self.assertEqual(self.w.items[-1], ("connect", "00:00:00:00:00:02"))
+
+    def test_tray_has_no_power_off(self):
+        import m4_tray as T
+        texts = " ".join(t for _i, t, _f in T.menu_items({"noise": 0, "eq": "Rock"})).lower()
+        self.assertNotIn("power", texts)
+        self.assertNotIn("off ", texts)
+
+
+class IconTest(unittest.TestCase):
+    def test_glyphs_render_and_differ(self):
+        import m4_tray as T
+        imgs = {m: T.render(m, 16, (255, 255, 255)) for m in (0, 1, 2)}
+        alpha = {m: sum(px[3] for row in img for px in row) for m, img in imgs.items()}
+        self.assertTrue(all(a > 0 for a in alpha.values()))
+        self.assertGreater(alpha[0], alpha[2])                   # Adaptive adds the sound arcs
+        self.assertNotEqual(imgs[0], imgs[1])
+        res = T.icon_resource(imgs[0])
+        self.assertEqual(len(res), 40 + 16 * 16 * 4 + 4 * 16)
+
+    def test_tooltip_fits_and_menu_marks_the_mode(self):
+        import m4_tray as T
+        self.assertLessEqual(len(T.tooltip({"noise": 1, "eq": "x" * 300, "battery": 50})), 127)
+        items = {i: f for i, _t, f in T.menu_items({"noise": 1, "busy": True}) if i}
+        self.assertIn("check", items[T.ID_NOISE + 1])
+        self.assertIn("grey", items[T.ID_NEXT])
+
+    def test_autostart_command_runs_tray_mode(self):
+        import m4_tray as T
+        self.assertTrue(T.autostart_command("m4_app.py").endswith('m4_app.py" --tray'))
+
+
 class ServerTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
