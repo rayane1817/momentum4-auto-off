@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gaia_client as G  # noqa: E402  (also puts ../tools on sys.path)
 import m4_commands as M4  # noqa: E402
 
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.2.0"
 SENN = G.SENNHEISER
 
 BANDS = ("63 Hz", "250 Hz", "1 kHz", "4 kHz", "8 kHz")

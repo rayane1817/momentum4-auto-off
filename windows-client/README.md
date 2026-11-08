@@ -1,27 +1,29 @@
 # MOMENTUM 4 on Windows
 
 Two tools live here:
-- **M4 Control** (`m4_app.py`): an early Windows app with a window. Noise control, EQ with presets, the listening and call settings, and Power off.
+- **M4 Control** (`m4_app.py` + `ui/index.html`): the Windows app. Noise control, EQ with presets, the listening and call settings, and Power off.
 - **`gaia_client.py`**: the command-line client used for testing (below).
 
-## M4 Control (early version, 0.1.0)
+## M4 Control (0.2.0)
 
-What it does: the same settings as the Android app's Home, Equaliser, Listening and Device pages, plus a Power off button (true off, wake with the headphone button). What it doesn't do yet: automatic power-off when idle (the guard). That is still Android only.
+Same look and pages as the Android app (design v4): dot battery, noise control with round buttons, tiles, Poweramp-style EQ faders with the dot-matrix curve and preset sheet, Listening and Device pages, Power off. Follows the Windows light/dark setting. Not in it yet: automatic power-off when idle (the guard), which is still Android only.
 
 Setup:
 1. Install Python 3.9 or newer from python.org (tick "Add python.exe to PATH"). Nothing else to install.
 2. Pair the headphones with this PC in Windows Settings > Bluetooth.
 3. Double-click `start-m4-app.bat` (or run `pythonw m4_app.py`).
 
-The app lists the PC's paired Bluetooth devices, picks the MOMENTUM 4, and connects on start. Your choice and your own EQ presets are saved in `%LOCALAPPDATA%\M4Control\settings.json`, logs in `%LOCALAPPDATA%\M4Control\logs` (no Bluetooth address in them). **Log > Copy report** copies a report for a GitHub issue.
+It opens in its own Edge window (Edge comes with Windows; Chrome or the default browser if Edge is missing), finds the paired MOMENTUM 4 and connects. Your choice and your own EQ presets are saved in `%LOCALAPPDATA%\M4Control\settings.json`, logs in `%LOCALAPPDATA%\M4Control\logs` (no Bluetooth address in them). **Device > Copy report** copies a report for a GitHub issue. The app quits about 10 s after you close its window.
+
+How it works: `m4_app.py` owns the Bluetooth link (same code as the command-line client) and serves the window (`ui/index.html`) on 127.0.0.1 only, behind a random token checked on every request, with Host and Origin checks. No internet, nothing listens on the network. `m4_logic.py` builds every frame and only allows documented commands; Power off is the one exception, from its button only, after a confirm.
 
 Good to know:
-- The app talks to the headphones over the PC's own Bluetooth. A Sennheiser BTD 600/700 USB dongle only carries audio, so the PC also needs its own Bluetooth paired with the M4. The M4 holds two connections at once (for example the phone and the dongle); a third may be refused. Not tested yet with a dongle.
-- The phone app's widgets work the same way: they open their own short link to the headphones, which is why they work even when the phone isn't playing to them.
+- The app talks to the headphones over the PC's own Bluetooth. A Sennheiser BTD 600/700 USB dongle only carries audio, so the PC also needs its own Bluetooth paired with the M4. Not tested yet with a dongle.
+- The M4 accepts a second control link at the same time (seen 8 Nov 2026: two apps on this PC were connected together), so the phone app and this app can probably both be open.
+- The phone app's widgets open their own short link to the headphones, which is why they work even when the phone isn't playing to them.
 - If the guard is on in the Android app, it only sees the phone. It can switch the headphones off while you listen on the PC.
-- Only documented commands are sent (`m4_logic.req()` checks every frame against `tools/m4_commands.py` and the blocklist). Power off is the one exception, from its button only, after a confirm.
 
-Tested 8 Nov 2026 on Windows 10 with Python 3.12, M4 fw 3.38.3: connect, read every setting, Smart pause and one EQ band changed and read back, then restored. Power off was not pressed. Unit tests: `python -m unittest test_m4_logic`.
+Tested 8 Nov 2026 on Windows 10, Python 3.12, M4 fw 3.38.3: connect and read all; presets (Rock, Movie, Flat), a fader drag and Smart pause changed and read back, then restored. Power off: the confirm opens, not pressed. Unit tests: `python -m unittest discover -p "test_*.py"`.
 
 # MOMENTUM 4 GAIA client (PC)
 

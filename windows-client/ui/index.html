@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M4 Control</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23D98C55' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 15v-3a8 8 0 0 1 16 0v3M4 15h3v5H5a1 1 0 0 1-1-1zM20 15h-3v5h2a1 1 0 0 0 1-1z'/%3E%3C/svg%3E">
+<style>
+/* Design v4 tokens (docs/design-spec-v4.md, res/values(-night)/colors.xml). Dark first, light follows Windows. */
+:root{--bg:#000000;--card:#1C1C1C;--hover:#242424;--btn:#2C2C2C;--ink:#F2F2F2;--ink2:#9E9E9E;--rule:#2A2A2A;--track:#3A3A3A;
+  --sel:#F2F2F2;--onSel:#000000;--copper:#D98C55;--danger:#FF7A6E;--thumb:#262626;--thumbEdge:#555555;
+  --glow:rgba(217,140,85,.75);--unlit:#2A2A2A;--soft:rgba(217,140,85,.40);--lit:#6E6E6E;--swoff:#3A3A3A;--knoboff:#9E9E9E;color-scheme:dark}
+@media (prefers-color-scheme: light){:root{--bg:#F2F2F2;--card:#FFFFFF;--hover:#F7F7F7;--btn:#E6E6E6;--ink:#0A0A0A;--ink2:#5E5E5E;--rule:#E0E0E0;
+  --track:#CFCFCF;--sel:#0A0A0A;--onSel:#FFFFFF;--copper:#9A4E1C;--danger:#B3261E;--thumb:#FFFFFF;--thumbEdge:#9A9A9A;
+  --glow:rgba(154,78,28,.25);--unlit:#E6E6E6;--soft:rgba(154,78,28,.30);--lit:#A8A8A8;--swoff:#CFCFCF;--knoboff:#FFFFFF;color-scheme:light}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.35 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif}
+::-webkit-scrollbar{width:10px}::-webkit-scrollbar-thumb{background:var(--btn);border-radius:5px;border:2px solid var(--bg)}
+button{font:inherit;color:inherit;cursor:pointer;border:none;background:none;padding:0;margin:0}
+button:disabled{cursor:default}
+button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--copper);outline-offset:2px}
+.wrap{max-width:440px;margin:0 auto;padding:0 12px 28px;display:flex;flex-direction:column;gap:4px}
+.serif{font-family:"Sitka Display","Sitka Text",Georgia,serif;font-weight:400}
+.mono{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace}
+.gate{opacity:.38;pointer-events:none}
+
+.top{display:flex;justify-content:flex-end;padding-top:8px}
+.iconbtn{width:44px;height:44px;border-radius:22px;display:flex;align-items:center;justify-content:center}
+.iconbtn:hover{background:var(--card)}
+.hero{display:flex;flex-direction:column;align-items:center;gap:10px;padding:8px 0 28px}
+.dots{display:flex;gap:9px}
+.glyph{display:grid;grid-template-columns:repeat(5,8px);gap:3px}
+.glyph i{width:8px;height:8px;border-radius:4px;background:var(--unlit)}
+.glyph i.on{background:var(--ink)}.glyph i.cu{background:var(--copper)}
+.devname{font-size:26px;padding-top:10px}
+.status{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2);text-align:center;max-width:360px}
+.led{width:7px;height:7px;border-radius:4px;flex:none;border:1.5px solid var(--ink2)}
+.led.live{border:none;background:var(--copper)}
+.led.busy{border-color:var(--copper);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.25}}
+.pill{margin-top:6px;height:36px;padding:0 18px;border-radius:18px;font-size:14px;font-weight:600;background:var(--btn)}
+.pill.key{background:var(--copper);color:var(--bg)}
+.pill:disabled{opacity:.6}
+
+.card{background:var(--card);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:16px}
+.modes{display:flex;justify-content:space-around}
+.mode{display:flex;flex-direction:column;align-items:center;gap:8px;width:96px}
+.mode .c{width:60px;height:60px;border-radius:30px;display:flex;align-items:center;justify-content:center;background:var(--btn);color:var(--ink2);transition:background .15s,color .15s}
+.mode .l{font-size:12px;color:var(--ink2)}
+.mode:hover .c{filter:brightness(1.15)}
+.mode.sel .c{background:var(--sel);color:var(--onSel)}
+.mode.sel .l{color:var(--ink);font-weight:600}
+.custom{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--rule);padding-top:12px}
+.ends{display:flex;font-size:13px;color:var(--ink2)}
+.ends>span:first-child,.ends>span:last-child{flex:1}.ends>span:last-child{text-align:right}
+.ends .mono{color:var(--ink)}
+input.lvl{-webkit-appearance:none;appearance:none;width:100%;height:28px;margin:0;background:transparent;--p:0%}
+input.lvl::-webkit-slider-runnable-track{height:3px;border-radius:2px;background:linear-gradient(to right,var(--copper) var(--p),var(--track) var(--p))}
+input.lvl::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;margin-top:-8.5px;border-radius:10px;background:var(--ink);cursor:pointer}
+.wind{display:flex;align-items:center;gap:8px;padding-top:4px}
+.wind>span{flex:1;font-size:13px;color:var(--ink2)}
+.seg{height:32px;padding:0 14px;border-radius:16px;font-size:13px;background:var(--btn)}
+.seg.sel{background:var(--sel);color:var(--onSel)}
+
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.tile{position:relative;height:150px;border-radius:18px;background:var(--card)}
+.tile.short{height:120px}
+.tile>.go{position:absolute;inset:0;display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:16px;border-radius:18px;text-align:left}
+.tile>.go:hover{background:var(--hover)}
+.tile .txt{padding:16px;display:flex;flex-direction:column;gap:4px}
+.sub{font-size:13px;color:var(--ink2)}
+.tile .ic{position:absolute;right:16px;bottom:16px;display:flex;color:var(--ink2);pointer-events:none}
+.tile .swpos{position:absolute;left:16px;bottom:14px}
+.sw{position:relative;flex:none;display:block;width:46px;height:26px;border-radius:13px;background:var(--swoff);transition:background .15s}
+.sw>span{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:10px;background:var(--knoboff);transition:left .15s,background .15s}
+.sw.on{background:var(--soft)}.sw.on>span{left:23px;background:var(--copper)}
+.sw:disabled{opacity:.38}
+.powerrow{display:flex;align-items:center;gap:14px;height:60px;padding:0 16px;border-radius:18px;background:var(--card);color:var(--danger);text-align:left;width:100%}
+.powerrow:hover{background:var(--hover)}
+.powerrow>span:first-of-type{flex:1}
+.chev{color:var(--ink2);font-size:18px}
+
+.back{width:44px;height:44px;display:flex;align-items:center;padding-left:4px;margin-top:8px;border-radius:22px}
+.back:hover{background:var(--card)}
+h1{margin:4px 4px 16px;font-size:32px;font-weight:400}
+.sec{font-size:13px;color:var(--ink2);padding:0 4px;margin:16px 0 8px}
+.group{display:flex;flex-direction:column;gap:2px}
+.row{display:flex;align-items:center;gap:14px;min-height:64px;padding:8px 16px;background:var(--card);border-radius:6px;text-align:left;width:100%}
+.group>.row:first-child{border-top-left-radius:18px;border-top-right-radius:18px}
+.group>.row:last-child{border-bottom-left-radius:18px;border-bottom-right-radius:18px}
+button.row:hover{background:var(--hover)}
+.row .ic{display:flex;color:var(--ink2)}
+.row .t{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.row .v{font-size:14px;color:var(--ink2)}
+.row .ok{color:var(--copper);font-size:18px}
+.row.stack{flex-wrap:wrap}
+.row.stack input{flex-basis:100%;margin:2px 0 4px 32px;width:calc(100% - 32px)}
+
+.faders{position:relative;height:340px;touch-action:none;user-select:none;cursor:ns-resize;border-radius:12px}
+.fcols{position:absolute;left:0;right:0;top:0;height:280px;display:grid;grid-template-columns:repeat(5,1fr)}
+.fcol{position:relative}
+.track{position:absolute;left:50%;top:12px;width:1px;height:256px;margin-left:-.5px;background:var(--track)}
+.tick{position:absolute;left:50%;width:22px;margin-left:-11px;display:flex;justify-content:space-between}
+.tick i{width:6px;height:1px;background:var(--ink2)}
+.fill{position:absolute;left:50%;width:3px;margin-left:-1.5px;border-radius:2px;background:var(--copper);box-shadow:0 0 10px var(--glow)}
+.cap{position:absolute;left:50%;width:36px;height:60px;margin-left:-18px;border-radius:15px;border:1.5px solid var(--thumbEdge);background:var(--thumb);display:flex;align-items:center;justify-content:center}
+.cap i{width:14px;height:3px;border-radius:2px;background:var(--ink)}
+.fcol.kb .cap{border-color:var(--copper)}
+.flabels{position:absolute;left:0;right:0;top:290px;display:grid;grid-template-columns:repeat(5,1fr);text-align:center}
+.flabels b{font-size:15px;display:block}.flabels span{font-size:13px;color:var(--ink2)}
+.strip{border-radius:16px;background:var(--card);overflow:hidden;line-height:0}
+.strip svg{width:100%;height:auto;display:block}
+.prow{display:flex;align-items:center;gap:8px}
+.prow .flat{height:44px;padding:0 18px;border-radius:22px;background:var(--btn);font-weight:600}
+.prow .pname{flex:1;min-width:0;height:44px;border:1.5px solid var(--ink2);border-radius:22px;font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 12px}
+.prow .more{width:44px;height:44px;border:1.5px solid var(--ink2);border-radius:22px;font-size:18px;font-weight:700}
+.prow button:hover{filter:brightness(1.15)}
+.hint{font-size:12px;color:var(--ink2);text-align:center;margin:4px 0 8px}
+
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;z-index:10}
+.scrim.clear{background:transparent}
+.sheet{margin:auto auto 0;width:100%;max-width:440px;max-height:86vh;overflow:auto;display:flex;flex-direction:column;gap:4px;padding:12px 12px 24px;border-radius:24px 24px 0 0;background:var(--card)}
+.sheet .head{display:flex;align-items:center;padding:4px 4px 8px}
+.sheet .head span{flex:1}
+.link{height:40px;color:var(--copper);font-weight:600;padding:0 8px;border-radius:8px}
+.link:hover{background:var(--btn)}
+.prs{display:flex;align-items:center;gap:4px}
+.pr{flex:1;display:flex;align-items:center;gap:14px;height:52px;padding:0 12px;border-radius:12px;text-align:left;min-width:0}
+.pr:hover{background:var(--hover)}
+.pr.sel{background:var(--btn)}
+.pr .n{flex:1;font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pr .ok{color:var(--copper);font-size:18px}
+.del{width:40px;height:40px;border-radius:20px;color:var(--ink2);display:flex;align-items:center;justify-content:center;flex:none}
+.del:hover{background:var(--btn);color:var(--danger)}
+.dialog{margin:auto;width:340px;max-width:calc(100% - 32px);display:flex;flex-direction:column;gap:12px;padding:24px;border-radius:24px;background:var(--card)}
+.dialog .ttl{font-size:22px}
+.dialog p{margin:0;font-size:14px;line-height:20px;color:var(--ink2)}
+.dialog .btns{display:flex;justify-content:flex-end;gap:8px;padding-top:8px}
+.dialog .btns button{height:44px;padding:0 18px;border-radius:22px;background:var(--btn);font-weight:600;font-size:14px}
+.dialog .btns .danger{background:var(--danger);color:var(--bg)}
+.dialog .btns .key{background:var(--copper);color:var(--bg)}
+.dialog input{height:44px;border-radius:12px;border:1.5px solid var(--ink2);background:transparent;color:var(--ink);padding:0 12px;font:inherit}
+.menu{position:fixed;background:var(--card);border-radius:14px;padding:6px;box-shadow:0 8px 28px rgba(0,0,0,.5);display:flex;flex-direction:column;min-width:250px;border:1px solid var(--rule)}
+.menu button{height:44px;text-align:left;padding:0 12px;border-radius:8px}
+.menu button:hover{background:var(--btn)}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--sel);color:var(--onSel);padding:10px 16px;border-radius:20px;font-size:13px;z-index:20;max-width:90%;text-align:center}
+pre.log{margin:4px 0 0;max-height:340px;overflow:auto;font-size:11px;line-height:1.5;color:var(--ink2);white-space:pre-wrap;word-break:break-all;background:var(--card);border-radius:18px;padding:12px 14px}
+#stopped{position:fixed;inset:0;background:var(--bg);display:none;flex-direction:column;gap:8px;align-items:center;justify-content:center;text-align:center;padding:24px;z-index:30;color:var(--ink2)}
+#stopped .serif{font-size:26px;color:var(--ink)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="stopped" role="alert"><div class="serif">M4 Control stopped</div><div>Close this window and start M4 Control again.</div></div>
+<script>
+'use strict';
+const T = new URLSearchParams(location.search).get('t') || '';
+const app = document.getElementById('app');
+const $ = (s) => document.querySelector(s);
+let S = null, lastState = '', logs = [];
+const U = { page: 'home', sheet: false, menu: null, save: false, confirm: false, showLog: false,
+  drag: null, hold: false, press: false, pending: false, toast: '', toastT: 0, kb: 0 };
+
+// Our own line icons (design v4 section 8), 24 px grid
+const I = {
+  eq: 'M6 4v6M6 14v6M12 4v2M12 10v10M18 4v10M18 18v2M4 12h4M10 8h4M16 16h4',
+  ear: 'M7 9a5 5 0 0 1 10 0c0 3-2.5 3.5-3.2 5.6-.5 1.5-.8 3.4-2.8 3.4a2.5 2.5 0 0 1-2.5-2.5M10 9a2 2 0 0 1 4 0',
+  phones: 'M4 15v-3a8 8 0 0 1 16 0v3M4 15h3v5H5a1 1 0 0 1-1-1zM20 15h-3v5h2a1 1 0 0 0 1-1z',
+  power: 'M12 3v8M6.3 6.3a8 8 0 1 0 11.4 0', moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
+  bass: 'M3 12h3l3-7 4 14 3-7h5', speech: 'M4 6h16v10H9l-5 4zM8 10h8M8 13h5', pause: 'M9 5v14M15 5v14',
+  call: 'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A17 17 0 0 1 3 6a2 2 0 0 1 2-2z',
+  bolt: 'M13 3L5 14h6l-1 7 8-11h-6z',
+  hand: 'M8 13V5.5a1.5 1.5 0 0 1 3 0V11M11 10V4.5a1.5 1.5 0 0 1 3 0V11M14 10.5V6a1.5 1.5 0 0 1 3 0v8a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-2.7L3 13.5a1.5 1.5 0 0 1 2.5-1.7L8 15',
+  head: 'M12 3a6 6 0 0 1 6 6v3l1.5 3H17v3a2 2 0 0 1-2 2h-2v-3M12 3a6 6 0 0 0-6 6c0 2 1 3.5 2 4.5V21',
+  hires: 'M4 7h16v10H4zM8 10v4M8 12h3M11 10v4M14 10h2a2 2 0 0 1 0 4h-2z',
+  info: 'M12 8h.01M11 12h1v5h1M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', clock: 'M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z',
+  code: 'M8 8l-4 4 4 4M16 8l4 4-4 4', list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
+  refresh: 'M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7', report: 'M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5',
+  folder: 'M3 6h6l2 2h10v11H3z', trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13',
+  back: 'M19 12H5M11 6l-6 6 6 6',
+  cog: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z',
+  adaptive: 'M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6zM18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z',
+  custom: 'M4 8h10M18 8h2M4 16h2M10 16h10M16 6v4M8 14v4', off: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM5.6 5.6l12.8 12.8'
+};
+const NOISE = ['Adaptive', 'Custom', 'Off'], NOISE_IC = [I.adaptive, I.custom, I.off];
+const WIND = ['Off', 'Auto', 'Max'], HZ = ['63', '250', '1K', '4K', '8K'];
+const LISTEN = ['smart_pause', 'low_latency', 'hires', 'auto_answer', 'comfort_call', 'on_head', 'touch'];
+// 5x7 dot font (DotNumerals)
+const GL = { '0': ['01110','10001','10011','10101','11001','10001','01110'], '1': ['00100','01100','00100','00100','00100','00100','01110'],
+  '2': ['01110','10001','00001','00010','00100','01000','11111'], '3': ['11111','00010','00100','00010','00001','10001','01110'],
+  '4': ['00010','00110','01010','10010','11111','00010','00010'], '5': ['11111','10000','11110','00001','00001','10001','01110'],
+  '6': ['00110','01000','10000','11110','10001','10001','01110'], '7': ['11111','00001','00010','00100','01000','01000','01000'],
+  '8': ['01110','10001','10001','01110','10001','10001','01110'], '9': ['01110','10001','10001','01111','00001','00010','01100'],
+  '%': ['11001','11010','00010','00100','01000','01011','10011'], '-': ['00000','00000','00000','11111','00000','00000','00000'] };
+
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const svg = (d, size = 18, w = 1.5) => `<svg aria-hidden="true" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+const live = () => !!S && S.conn === 'connected';
+const fmt = (g) => (g > 0 ? '+' : g < 0 ? '-' : '') + (Math.abs(g) / 10).toFixed(1);
+const same = (a, b) => a.every((v, i) => v === b[i]);
+
+function api(action, data) {
+  return fetch('/api?t=' + encodeURIComponent(T), { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ action }, data || {})) })
+    .then((r) => r.json()).then((r) => { if (r && r.ok === false && r.error) toast(r.error); return r; })
+    .catch(() => ({ ok: false }));
+}
+function toast(msg) { U.toast = msg; clearTimeout(U.toastT); U.toastT = setTimeout(() => { U.toast = ''; render(); }, 3200); render(); }
+
+function presets() {
+  return S.presets.builtin.map((p) => ({ name: p[0], g: p[1], custom: false }))
+    .concat(S.presets.custom.map((p) => ({ name: p[0], g: p[1], custom: true })));
+}
+function presetName(g) { const m = presets().find((p) => same(p.g, g)); return m ? m.name : 'Custom curve'; }
+function noiseIdx() { return S.anc_on == null ? -1 : !S.anc_on ? 2 : S.adaptive_on ? 0 : 1; }
+
+function dots(str, liveDot, label) {
+  let h = `<div class="dots" role="img" aria-label="${esc(label)}">`;
+  str.split('').forEach((ch, gi, arr) => {
+    const rows = GL[ch] || GL['-']; let last = -1;
+    if (gi === arr.length - 1 && liveDot) for (let c = 4; c >= 0 && last < 0; c--) if (rows.some((r) => r[c] === '1')) last = c;
+    h += '<div class="glyph">';
+    rows.forEach((r) => r.split('').forEach((b, c) => { h += `<i class="${b === '1' ? (c === last ? 'cu' : 'on') : ''}"></i>`; }));
+    h += '</div>';
+  });
+  return h + '</div>';
+}
+function sw(on, act, extra, disabled, label) {
+  return `<button class="sw ${on ? 'on' : ''}" role="switch" aria-checked="${!!on}" aria-label="${esc(label)}" data-act="${act}" ${extra || ''} ${disabled ? 'disabled' : ''}><span></span></button>`;
+}
+function spline(pts) {
+  let d = 'M' + pts[0].x.toFixed(1) + ' ' + pts[0].y.toFixed(1);
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
+    d += ' C' + (p1.x + (p2.x - p0.x) / 6).toFixed(1) + ' ' + (p1.y + (p2.y - p0.y) / 6).toFixed(1) + ' ' +
+      (p2.x - (p3.x - p1.x) / 6).toFixed(1) + ' ' + (p2.y - (p3.y - p1.y) / 6).toFixed(1) + ' ' + p2.x.toFixed(1) + ' ' + p2.y.toFixed(1);
+  }
+  return d;
+}
+function header(title) {
+  return `<button class="back" data-act="go" data-page="home" aria-label="Back">${svg(I.back, 22, 1.6)}</button><h1 class="serif">${esc(title)}</h1>`;
+}
+function row(o) {
+  const tag = o.act ? 'button' : 'div';
+  const attrs = o.act ? `data-act="${o.act}" ${o.attrs || ''}` : '';
+  return `<${tag} class="row ${o.cls || ''}" ${attrs}><span class="ic">${svg(o.icon)}</span><span class="t"><span style="color:${o.color || 'var(--ink)'}">${esc(o.label)}</span>` +
+    (o.sub ? `<span class="sub">${esc(o.sub)}</span>` : '') + `</span>` + (o.right || '') + `</${tag}>`;
+}
+const val = (v, id) => `<span class="v mono" ${id ? `id="${id}"` : ''}>${esc(v)}</span>`;
+const tog = (key, label, sub, icon) => row({ icon, label, sub,
+  right: sw(S.toggles[key], 'toggle', `data-key="${key}"`, !live() || S.toggles[key] == null, label) });
+
+// ------------------------------------------------------------- pages
+
+function statusText() {
+  if (live()) return 'Connected' + (S.firmware ? ' · fw ' + S.firmware : '');
+  return S.msg || 'Not connected';
+}
+
+function home() {
+  const L = live(), ni = noiseIdx(), busy = S.conn === 'connecting';
+  const batt = L && S.battery != null ? S.battery + '%' : '--%';
+  let h = `<div class="top"><button class="iconbtn" data-act="go" data-page="device" aria-label="Device and settings">${svg(I.cog, 22)}</button></div>`;
+  h += `<div class="hero">${dots(batt, L && S.battery != null, L && S.battery != null ? 'Battery ' + S.battery + ' percent' : 'Battery not read')}` +
+    `<div class="devname serif">MOMENTUM 4</div>` +
+    `<div class="status"><span class="led ${L ? 'live' : busy ? 'busy' : ''}"></span><span>${esc(statusText())}</span></div>` +
+    `<button class="pill ${L ? '' : 'key'}" data-act="conn" ${busy || S.device == null ? 'disabled' : ''}>${L ? 'Disconnect' : busy ? 'Connecting...' : 'Connect'}</button></div>`;
+  h += `<div class="card ${L ? '' : 'gate'}"><div>Noise control</div><div class="modes" role="radiogroup" aria-label="Noise mode">` +
+    NOISE.map((n, i) => `<button class="mode ${ni === i ? 'sel' : ''}" role="radio" aria-checked="${ni === i}" data-act="noise" data-i="${i}"><span class="c">${svg(NOISE_IC[i], 22, 1.6)}</span><span class="l">${n}</span></button>`).join('') + '</div>';
+  if (ni === 1) {
+    h += `<div class="custom"><div class="ends"><span>ANC</span><span class="mono" id="lvlv">${S.level}</span><span>Transparency</span></div>` +
+      `<input class="lvl" type="range" min="0" max="100" value="${S.level}" data-range="level" style="--p:${S.level}%" aria-label="ANC to transparency">` +
+      `<div class="wind"><span>Anti-wind</span>` + WIND.map((w, i) => `<button class="seg ${S.anti_wind === i ? 'sel' : ''}" aria-pressed="${S.anti_wind === i}" data-act="wind" data-i="${i}">${w}</button>`).join('') + '</div></div>';
+  }
+  h += '</div>';
+  const t = S.toggles, known = LISTEN.every((k) => t[k] != null);
+  const tiles = [
+    { t: 'Equaliser', s: L ? presetName(S.eq) : 'not read', icon: I.eq, page: 'eq', gate: !L },
+    { t: 'Listening', s: !L ? 'not read' : known ? LISTEN.filter((k) => t[k]).length + ' of 7 on' : 'Reading...', icon: I.ear, page: 'listening', gate: !L },
+    { t: 'Auto power-off', s: 'Phone app only for now', icon: I.moon, page: 'guard', gate: false },
+    { t: 'Device', s: S.model ? S.model + (S.hardware ? ' · hw ' + S.hardware : '') : 'Picker, info, log', icon: I.phones, page: 'device', gate: false }];
+  h += '<div class="tiles">' + tiles.map((x) => `<div class="tile ${x.gate ? 'gate' : ''}"><button class="go" data-act="go" data-page="${x.page}"><span>${x.t}</span><span class="sub">${esc(x.s)}</span></button><span class="ic">${svg(x.icon)}</span></div>`).join('') + '</div>';
+  h += `<button class="powerrow ${L ? '' : 'gate'}" data-act="power">${svg(I.power, 18, 1.6)}<span>Power off now</span><span class="chev">›</span></button>`;
+  return h;
+}
+
+function eqPage() {
+  const L = live();
+  let h = header('Equaliser') + `<div class="${L ? '' : 'gate'}" style="display:flex;flex-direction:column;gap:12px">`;
+  h += `<div class="faders" id="faders" tabindex="0" role="group" aria-label="EQ faders. Drag, or sweep across. Arrow keys: left and right pick a band, up and down change it.">` +
+    '<div class="fcols">' + [0, 1, 2, 3, 4].map((i) => `<div class="fcol" id="col${i}"><span class="track"></span><span class="tick" style="top:12px"><i></i><i></i></span><span class="tick" style="top:140px"><i></i><i></i></span><span class="tick" style="top:268px"><i></i><i></i></span><span class="fill" id="fill${i}"></span><span class="cap" id="cap${i}"><i></i></span></div>`).join('') +
+    '</div><div class="flabels">' + HZ.map((z, i) => `<div><b>${z}</b><span class="mono" id="fv${i}"></span></div>`).join('') + '</div></div>';
+  h += '<div class="strip"><svg id="strip" viewBox="0 0 358 76" aria-hidden="true"></svg></div>';
+  h += `<div class="prow"><button class="flat" data-act="flat">Flat</button><button class="pname" id="pname" data-act="sheet" aria-haspopup="dialog"></button><button class="more" data-act="menu" aria-label="More">⋮</button></div>`;
+  h += '<div class="hint">Drag a fader, or sweep across all five. Double-click resets a band to 0.</div>';
+  const hires = S.toggles.hires;
+  h += '<div class="tiles">' +
+    `<div class="tile short"><div class="txt"><span>Bass boost</span><span class="sub">${S.toggles.bass ? 'On' : 'Off'}</span></div><span class="ic">${svg(I.bass)}</span><span class="swpos">${sw(S.toggles.bass, 'toggle', 'data-key="bass"', !L || S.toggles.bass == null, 'Bass boost')}</span></div>` +
+    `<div class="tile short"><div class="txt"><span>Speech clarity</span><span class="sub">${hires !== false ? 'Needs Hi-Res off' : S.speech ? 'On' : 'Off'}</span></div><span class="ic">${svg(I.speech)}</span><span class="swpos">${sw(S.speech, 'speech', '', !L || hires !== false, 'Speech clarity')}</span></div>` +
+    '</div></div>';
+  return h;
+}
+
+function listening() {
+  const L = live();
+  return header('Listening') + `<div class="${L ? '' : 'gate'}">` +
+    '<div class="sec">Playback</div><div class="group">' +
+    tog('smart_pause', 'Smart pause', 'Pause when you take them off', I.pause) +
+    tog('low_latency', 'Low latency', 'From Sennheiser\'s older app. Effect not measured yet', I.bolt) +
+    tog('hires', 'Hi-Res 24/96', 'Takes effect after a restart', I.hires) + '</div>' +
+    '<div class="sec">Calls</div><div class="group">' +
+    tog('auto_answer', 'Auto-answer calls', '', I.call) + tog('comfort_call', 'Comfort call', '', I.speech) +
+    row({ icon: I.ear, label: 'Transparency during calls', cls: 'stack', right: val(S.call == null ? '-' : S.call + ' / 4', 'callv') +
+      `<input class="lvl" type="range" min="0" max="4" step="1" value="${S.call || 0}" data-range="call" style="--p:${(S.call || 0) * 25}%" aria-label="Transparency during calls">` }) + '</div>' +
+    '<div class="sec">Headphones</div><div class="group">' +
+    tog('on_head', 'On-head detection', '', I.head) + tog('touch', 'Touch controls', '', I.hand) + '</div></div>';
+}
+
+function device() {
+  const L = live(), nr = 'not read';
+  let h = header('Device') + '<div class="sec">Headphones</div><div class="group">';
+  if (!S.devices.length) h += row({ icon: I.phones, label: 'No paired devices', sub: 'Pair the headphones in Windows Settings > Bluetooth, then Rescan' });
+  S.devices.forEach((n, i) => {
+    const sel = S.device === i;
+    h += row({ icon: I.phones, label: n, act: 'device', attrs: `data-i="${i}"`,
+      sub: sel ? (L ? 'Connected' : S.conn === 'connecting' ? 'Connecting...' : 'Selected. Tap to connect') : 'Tap to use this device',
+      right: sel ? '<span class="ok">✓</span>' : '' });
+  });
+  h += row({ icon: I.refresh, label: 'Rescan', sub: 'Read the paired devices again', act: 'rescan' }) + '</div>';
+  h += '<div class="sec">Info</div><div class="group">' +
+    row({ icon: I.bolt, label: 'Battery', right: val(L && S.battery != null ? S.battery + ' %' : nr) }) +
+    row({ icon: I.info, label: 'Model', right: val(L && S.model ? S.model : nr) }) +
+    row({ icon: I.code, label: 'Firmware', right: val(L && S.firmware ? S.firmware : nr) }) +
+    row({ icon: I.info, label: 'Hardware', right: val(L && S.hardware ? S.hardware : nr) }) +
+    row({ icon: I.info, label: 'App', right: val('Windows ' + S.version) }) + '</div>';
+  const timer = S.timer == null ? nr : S.timer === 0 ? 'off' : S.timer % 60 === 0 ? S.timer / 60 + ' min' : S.timer + ' s';
+  h += '<div class="sec">Advanced</div><div class="group">' +
+    row({ icon: I.clock, label: 'Firmware timer', sub: 'Only reaches standby, Bluetooth stays on', right: val(L ? timer : nr) }) +
+    row({ icon: I.report, label: 'Copy report', sub: 'For a GitHub issue. No addresses or device names', act: 'report', right: '<span class="chev">›</span>' }) +
+    row({ icon: I.list, label: 'Log', sub: U.showLog ? 'Hide the log' : 'Every frame sent and received', act: 'showlog', right: '<span class="chev">' + (U.showLog ? '⌄' : '›') + '</span>' }) +
+    row({ icon: I.folder, label: 'Open log folder', act: 'logs', right: '<span class="chev">›</span>' }) + '</div>';
+  if (U.showLog) h += '<pre class="log mono" id="logbox"></pre>';
+  return h;
+}
+
+function guard() {
+  return header('Auto power-off') +
+    '<div class="sec">Status</div><div class="group">' +
+    row({ icon: I.moon, label: 'Not on Windows yet', sub: 'The guard runs in the Android app. It switches the headphones off after your phone has played nothing for a while.' }) +
+    row({ icon: I.info, label: 'Listening on this PC?', sub: 'The phone guard only sees the phone. It can switch the headphones off while you listen here.' }) + '</div>' +
+    '<div class="sec">Now</div><div class="group">' +
+    row({ icon: I.power, label: 'Power off now', color: 'var(--danger)', sub: 'Same as holding the button. Press it to turn them on.', act: 'power', cls: live() ? '' : 'gate', right: '<span class="chev">›</span>' }) + '</div>';
+}
+
+function sheet() {
+  const list = presets();
+  return `<div class="scrim" data-act="closesheet" data-self="1"><div class="sheet" role="dialog" aria-label="Presets"><div class="head"><span>Presets</span><button class="link" data-act="closesheet">Done</button></div>` +
+    list.map((p, i) => {
+      const sel = same(p.g, S.eq);
+      return `<div class="prs"><button class="pr ${sel ? 'sel' : ''}" data-act="preset" data-i="${i}" aria-pressed="${sel}">` +
+        `<svg width="64" height="24" viewBox="0 0 64 24" aria-hidden="true"><line x1="0" x2="64" y1="12" y2="12" stroke="var(--rule)" stroke-width="1"/><path d="${spline(p.g.map((v, j) => ({ x: 4 + j * 14, y: 12 - v / 60 * 9 })))}" fill="none" stroke="var(--copper)" stroke-width="1.6" stroke-linecap="round"/></svg>` +
+        `<span class="n">${esc(p.name)}</span>${sel ? '<span class="ok">✓</span>' : ''}</button>` +
+        (p.custom ? `<button class="del" data-act="delpreset" data-name="${esc(p.name)}" aria-label="Delete ${esc(p.name)}">${svg(I.trash)}</button>` : '') + '</div>';
+    }).join('') +
+    '<button class="link" style="align-self:flex-start;margin:8px 0 0 4px" data-act="savedlg">Save current curve as a preset</button></div></div>';
+}
+function menu() {
+  return `<div class="scrim clear" data-act="closemenu" data-self="1"><div class="menu" role="menu" style="top:${U.menu.top}px;right:${U.menu.right}px">` +
+    '<button role="menuitem" data-act="savedlg">Save current curve as a preset</button><button role="menuitem" data-act="flat">Flat</button></div></div>';
+}
+function saveDlg() {
+  return `<div class="scrim" data-act="closesave" data-self="1"><div class="dialog" role="dialog" aria-label="Save preset"><div class="ttl serif">Save preset</div>` +
+    '<p>Saved on this PC. The headphones only keep the curve.</p><input id="pname-in" type="text" maxlength="30" placeholder="Name" aria-label="Preset name">' +
+    '<div class="btns"><button data-act="closesave">Cancel</button><button class="key" data-act="dosave">Save</button></div></div></div>';
+}
+function confirmDlg() {
+  return `<div class="scrim" data-act="closeconfirm" data-self="1"><div class="dialog" role="alertdialog" aria-label="Power off the headphones?"><div class="ttl serif">Power off the headphones?</div>` +
+    '<p>They switch off fully and disconnect from every device. Only the button on the headphones turns them back on.</p>' +
+    '<div class="btns"><button data-act="closeconfirm">Cancel</button><button class="danger" data-act="poweroff">Power off</button></div></div></div>';
+}
+
+// ------------------------------------------------------------ render
+
+const PAGES = { home, eq: eqPage, listening, device, guard };
+function keyOf(el) { return el && el.dataset ? [el.dataset.act, el.dataset.i, el.dataset.key, el.dataset.page, el.dataset.range, el.id].join('|') : null; }
+function render() {
+  if (!S) return;
+  if (U.drag || U.hold || U.press) { U.pending = true; return; }
+  U.pending = false;
+  const fk = document.activeElement && document.activeElement !== document.body ? keyOf(document.activeElement) : null;
+  const typed = $('#pname-in') ? $('#pname-in').value : null;
+  const y = window.scrollY;
+  let h = '<div class="wrap">' + (PAGES[U.page] || home)() + '</div>';
+  if (U.sheet) h += sheet();
+  if (U.menu) h += menu();
+  if (U.save) h += saveDlg();
+  if (U.confirm) h += confirmDlg();
+  if (U.toast) h += `<div class="toast" role="status">${esc(U.toast)}</div>`;
+  app.innerHTML = h;
+  window.scrollTo(0, y);
+  if (typed != null && $('#pname-in')) $('#pname-in').value = typed;
+  if (U.page === 'eq') { paintEq(S.eq); bindFaders(); }
+  if (U.page === 'device' && U.showLog) updateLog(true);
+  let target = null;
+  if (fk) document.querySelectorAll('button,input,[tabindex]').forEach((el) => { if (!target && keyOf(el) === fk) target = el; });
+  if (U.save && (!target || target.id !== 'pname-in') && typed == null) target = $('#pname-in');
+  if (target) target.focus({ preventScroll: true });
+}
+function flush() { if (U.pending) render(); }
+
+// ------------------------------------------------------------ EQ faders
+
+const TOP = 12, SPAN = 256, W = 358;
+function paintEq(g) {
+  g.forEach((v, i) => {
+    const cy = TOP + SPAN / 2 - v / 60 * (SPAN / 2);
+    const cap = document.getElementById('cap' + i), fill = document.getElementById('fill' + i);
+    if (!cap) return;
+    cap.style.top = (cy - 30) + 'px';
+    fill.style.top = (cy + 30) + 'px';
+    fill.style.height = Math.max(0, TOP + SPAN - cy - 30) + 'px';
+    document.getElementById('fv' + i).textContent = fmt(v);
+    document.getElementById('col' + i).classList.toggle('kb', document.activeElement && document.activeElement.id === 'faders' && U.kb === i);
+  });
+  const cx = (i) => (W / 5) * (i + 0.5);
+  const pts = g.map((v, i) => ({ x: cx(i), y: 38 - v / 60 * 28 }));
+  const full = [{ x: 0, y: pts[0].y }].concat(pts, [{ x: W, y: pts[4].y }]);
+  const interp = (x) => { for (let i = 0; i < full.length - 1; i++) if (x <= full[i + 1].x) { const a = full[i], b = full[i + 1], f = (x - a.x) / (b.x - a.x || 1); return a.y + (b.y - a.y) * f; } return full[full.length - 1].y; };
+  let m = '';
+  for (let col = 0; col < 34; col++) {
+    const x = 9 + col * 10.3, cyv = interp(x);
+    for (let r = 0; r < 7; r++) { const y = 8 + r * 10; m += `<circle cx="${x.toFixed(1)}" cy="${y}" r="1.8" fill="${y >= cyv ? 'var(--lit)' : 'var(--unlit)'}"/>`; }
+  }
+  const strip = $('#strip');
+  if (strip) strip.innerHTML = m + `<path d="${spline(full)}" fill="none" stroke="var(--copper)" stroke-width="2" stroke-linecap="round"/>`;
+  const pn = $('#pname');
+  if (pn) pn.textContent = presetName(g);
+}
+function bindFaders() {
+  const el = $('#faders');
+  if (!el) return;
+  const at = (e) => {
+    const r = el.getBoundingClientRect();
+    const band = Math.max(0, Math.min(4, Math.floor((e.clientX - r.left) / (r.width / 5))));
+    const g = Math.max(-60, Math.min(60, Math.round((TOP + SPAN / 2 - (e.clientY - r.top)) / (SPAN / 2) * 60)));
+    return { band, g };
+  };
+  el.addEventListener('pointerdown', (e) => {
+    if (!live() || e.button !== 0) return;
+    el.setPointerCapture(e.pointerId);
+    U.drag = { start: S.eq.slice(), g: S.eq.slice() };
+    const p = at(e); U.drag.g[p.band] = p.g; U.kb = p.band; paintEq(U.drag.g);
+  });
+  el.addEventListener('pointermove', (e) => { if (!U.drag) return; const p = at(e); U.drag.g[p.band] = p.g; paintEq(U.drag.g); });
+  const end = () => {
+    if (!U.drag) return;
+    const d = U.drag; U.drag = null;
+    const changes = [];
+    d.g.forEach((v, i) => { if (v !== d.start[i]) changes.push([i, v]); });
+    S.eq = d.g.slice();
+    if (changes.length) api('band', { changes });
+    flush();
+  };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+  el.addEventListener('lostpointercapture', end);
+  el.addEventListener('dblclick', (e) => { if (!live()) return; const p = at(e); S.eq[p.band] = 0; paintEq(S.eq); api('band', { changes: [[p.band, 0]] }); });
+  el.addEventListener('keydown', (e) => {
+    if (!live()) return;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { U.kb = Math.max(0, Math.min(4, U.kb + (e.key === 'ArrowLeft' ? -1 : 1))); paintEq(S.eq); e.preventDefault(); }
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      const g = Math.max(-60, Math.min(60, S.eq[U.kb] + (e.key === 'ArrowUp' ? 5 : -5)));
+      if (g !== S.eq[U.kb]) { S.eq[U.kb] = g; paintEq(S.eq); api('band', { changes: [[U.kb, g]] }); }
+      e.preventDefault();
+    }
+  });
+  el.addEventListener('focus', () => paintEq(S.eq));
+  el.addEventListener('blur', () => paintEq(S.eq));
+}
+
+// ------------------------------------------------------------ events
+
+function updateLog(force) {
+  const p = $('#logbox');
+  if (!p) return;
+  const bottom = force || p.scrollTop + p.clientHeight >= p.scrollHeight - 8;
+  p.textContent = logs.slice(-250).join('\n');
+  if (bottom) p.scrollTop = p.scrollHeight;
+}
+function copy(text) {
+  const done = () => toast('Report copied. No Bluetooth address or device names in it.');
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, () => fallback());
+  else fallback();
+  function fallback() {
+    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove(); done();
+  }
+}
+function doSave() {
+  const inp = $('#pname-in'); const name = inp ? inp.value.trim() : '';
+  if (!name) { if (inp) inp.focus(); return; }
+  api('save_preset', { name, gains: S.eq }).then((r) => { if (r.ok) { U.save = false; toast('Saved "' + name + '"'); } });
+}
+
+document.addEventListener('pointerdown', (e) => { if (e.button === 0) U.press = true; }, true);
+document.addEventListener('pointerup', () => {
+  U.press = false;
+  if (U.hold) setTimeout(() => { U.hold = false; flush(); }, 60);
+  setTimeout(flush, 0);
+}, true);
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act]');
+  if (!b || b.disabled) return;
+  if (b.dataset.self && e.target !== b) return;
+  const d = b.dataset, i = d.i != null ? parseInt(d.i, 10) : null;
+  switch (d.act) {
+    case 'go': U.page = d.page; U.showLog = false; U.sheet = false; window.scrollTo(0, 0); break;
+    case 'conn': api(live() ? 'disconnect' : 'connect'); break;
+    case 'noise': S.anc_on = i !== 2; S.adaptive_on = i === 0; api('noise', { mode: i }); break;
+    case 'wind': S.anti_wind = i; api('wind', { index: i }); break;
+    case 'toggle': { const on = !S.toggles[d.key]; S.toggles[d.key] = on; api('toggle', { key: d.key, on }); break; }
+    case 'speech': S.speech = !S.speech; api('speech', { on: S.speech }); break;
+    case 'flat': U.menu = null; S.eq = [0, 0, 0, 0, 0]; api('preset', { gains: S.eq }); break;
+    case 'sheet': U.sheet = true; break;
+    case 'closesheet': U.sheet = false; break;
+    case 'preset': S.eq = presets()[i].g.slice(); api('preset', { gains: S.eq }); break;
+    case 'delpreset': api('delete_preset', { name: d.name }); break;
+    case 'menu': { const r = b.getBoundingClientRect(); U.menu = { top: Math.round(r.bottom + 6), right: Math.round(window.innerWidth - r.right) }; break; }
+    case 'closemenu': U.menu = null; break;
+    case 'savedlg': U.menu = null; U.sheet = false; U.save = true; break;
+    case 'closesave': U.save = false; break;
+    case 'dosave': doSave(); return;
+    case 'power': U.confirm = true; break;
+    case 'closeconfirm': U.confirm = false; break;
+    case 'poweroff': U.confirm = false; api('poweroff', { confirmed: true }); break;
+    case 'device': api('connect', { device: i }); break;
+    case 'rescan': api('rescan').then(() => toast('Paired devices read again.')); break;
+    case 'report': api('report').then((r) => { if (r.ok) copy(r.text); }); break;
+    case 'logs': api('open_logs'); break;
+    case 'showlog': U.showLog = !U.showLog; break;
+  }
+  render();
+});
+
+document.addEventListener('input', (e) => {
+  const r = e.target.closest('[data-range]');
+  if (!r) return;
+  U.hold = true;
+  r.style.setProperty('--p', (r.value / r.max * 100) + '%');
+  const out = r.dataset.range === 'level' ? $('#lvlv') : $('#callv');
+  if (out) out.textContent = r.dataset.range === 'level' ? r.value : r.value + ' / 4';
+});
+document.addEventListener('change', (e) => {
+  const r = e.target.closest('[data-range]');
+  if (!r) return;
+  const v = parseInt(r.value, 10);
+  if (r.dataset.range === 'level') { S.level = v; api('level', { value: v }); }
+  else { S.call = v; api('call', { value: v }); }
+  U.hold = false;
+  flush();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && U.save && e.target.id === 'pname-in') { doSave(); return; }
+  if (e.key !== 'Escape') return;
+  if (U.save || U.confirm || U.sheet || U.menu) { U.save = U.confirm = U.sheet = false; U.menu = null; }
+  else if (U.page !== 'home') U.page = 'home';
+  render();
+});
+
+if (['eq', 'listening', 'device', 'guard'].includes(location.hash.slice(1))) U.page = location.hash.slice(1);
+(function start() {
+  const es = new EventSource('/events?t=' + encodeURIComponent(T));
+  let lost = 0;
+  const stopped = (on) => { $('#stopped').style.display = on ? 'flex' : 'none'; };
+  es.addEventListener('state', (e) => {
+    clearTimeout(lost); stopped(false);
+    if (e.data === lastState) return;
+    lastState = e.data; S = JSON.parse(e.data); render();
+  });
+  es.addEventListener('logs', (e) => { logs = JSON.parse(e.data); if (U.showLog) updateLog(); });
+  es.addEventListener('log', (e) => { logs.push(JSON.parse(e.data)); if (logs.length > 400) logs.splice(0, logs.length - 400); if (U.showLog) updateLog(); });
+  es.onerror = () => { clearTimeout(lost); lost = setTimeout(() => { if (es.readyState !== 1) stopped(true); }, 4000); };
+})();
+</script>
+</body>
+</html>

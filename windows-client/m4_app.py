@@ -1,59 +1,43 @@
 #!/usr/bin/env python3
-"""M4 Control: early Windows app for the MOMENTUM 4 (noise control, EQ, settings, power off).
+"""M4 Control: Windows app for the MOMENTUM 4 (noise control, EQ, settings, power off).
 
-Stock Python 3.9+ on Windows 10/11, no packages. Start with start-m4-app.bat or
-`pythonw m4_app.py`. The PC talks to the headphones over its own Bluetooth (GAIA over RFCOMM,
-the same transport as gaia_client.py), so the M4 must be paired with this PC.
+The window is ui/index.html (design v4, the Android app's look) in an Edge app window.
+This script serves it on 127.0.0.1 only, behind a random token, and owns the Bluetooth link
+(GAIA over RFCOMM, the same transport as gaia_client.py). Stock Python 3.9+, no packages, no
+internet. Start with start-m4-app.bat or `pythonw m4_app.py`. It quits about 10 s after its
+window closes.
 
-One worker thread owns the link; the UI only queues frames built by m4_logic (documented
-commands only). Logs: %LOCALAPPDATA%\\M4Control\\logs (no Bluetooth address in them).
+Every frame comes from m4_logic (documented commands only). Logs:
+%LOCALAPPDATA%\\M4Control\\logs, with no Bluetooth address in them.
 """
 
+import http.server
 import json
 import os
 import platform
 import queue
 import re
+import secrets
+import subprocess
 import sys
 import threading
 import time
-import tkinter as tk
-from tkinter import messagebox, simpledialog, ttk
+import urllib.parse
+import urllib.request
+import webbrowser
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
 import m4_logic as L  # noqa: E402
 
 G = L.G
 M4 = L.M4
 
-APP_NAME = "M4 Control"
 APP_DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "M4Control")
-SETTINGS_PATH = os.path.join(APP_DIR, "settings.json")
-LOG_DIR = os.path.join(APP_DIR, "logs")
+UI_FILE = os.path.join(HERE, "ui", "index.html")
 BATTERY_POLL_S = 120
 ADDR_RE = re.compile(r"(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}")
-
-# Same tokens as the Android app's dark theme (res/values-night/colors.xml)
-C = dict(bg="#000000", surface="#1C1C1C", sunk="#2C2C2C", ink="#F2F2F2", ink2="#9E9E9E",
-         rule="#2A2A2A", rule_strong="#3A3A3A", copper="#D98C55", danger="#FF7A6E", on_key="#000000")
-FONT = "Segoe UI"
-
-
-def load_settings():
-    try:
-        with open(SETTINGS_PATH, encoding="utf-8") as f:
-            s = json.load(f)
-        return s if isinstance(s, dict) else {}
-    except (OSError, ValueError):
-        return {}
-
-
-def save_settings(s):
-    os.makedirs(APP_DIR, exist_ok=True)
-    tmp = SETTINGS_PATH + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(s, f, indent=2)
-    os.replace(tmp, SETTINGS_PATH)
+LOG_KEEP = 400
 
 
 def scrub(text):
@@ -61,7 +45,7 @@ def scrub(text):
 
 
 class UiLogger(G.Logger):
-    """gaia_client's file logger, plus every line to the app's Log tab and command labels on replies."""
+    """gaia_client's file logger, plus every line to the app's log view, with command labels on replies."""
 
     def __init__(self, directory, sink):
         self.sink = sink
@@ -77,7 +61,7 @@ class UiLogger(G.Logger):
 
 class Worker(threading.Thread):
     """Owns the RFCOMM link. Items: ("connect", addr), ("disconnect",), ("send", [frames]),
-    ("poweroff",), ("quit",). Posts ("state", name, text) and ("frame", Frame) to the UI."""
+    ("poweroff",), ("quit",). Posts ("state", name, text) and ("frame", Frame)."""
 
     def __init__(self, post, log):
         super().__init__(daemon=True, name="m4-link")
@@ -160,583 +144,476 @@ class Worker(threading.Thread):
             self.link = None
 
 
-class App:
-    def __init__(self):
-        self.settings = load_settings()
-        self.custom_presets = {k: tuple(L.clamp_gain(g) for g in v)
-                               for k, v in (self.settings.get("presets") or {}).items()
-                               if isinstance(v, list) and len(v) == 5}
-        self.uiq = queue.Queue()
+class Core:
+    """App state, actions from the page, frames from the worker. No HTTP in here (unit-tested)."""
+
+    def __init__(self, app_dir=APP_DIR, worker=None, devices=None):
+        self.app_dir = app_dir
+        self.settings_path = os.path.join(app_dir, "settings.json")
+        self.lock = threading.RLock()
+        self.clients = []
         self.log_lines = []
-        self.connected = False
-        self.poweroff_sent = False
-        self.info = {}
-        self.anc_on, self.adaptive_on = None, None
-        self.hires_on = None
-
-        self.root = tk.Tk()
-        self.root.title(APP_NAME)
-        self.root.configure(bg=C["bg"])
-        self.root.geometry("460x780")
-        self.root.minsize(420, 640)
-        self.root.protocol("WM_DELETE_WINDOW", self.quit)
-        self._style()
-
-        self.log = UiLogger(LOG_DIR, lambda line: self.uiq.put(("log", line)))
+        self.settings = self._load_settings()
+        self.custom = {}
+        for name, gains in (self.settings.get("presets") or {}).items():
+            if isinstance(name, str) and isinstance(gains, list) and len(gains) == 5:
+                try:
+                    self.custom[name[:30]] = [L.clamp_gain(g) for g in gains]
+                except (TypeError, ValueError):
+                    pass
+        self.s = self._blank()
+        self.log = UiLogger(os.path.join(app_dir, "logs"), self._on_log)
         self.log.note("M4 Control %s, %s, Python %s" % (L.APP_VERSION, platform.platform(), platform.python_version()))
-        self.worker = Worker(self.uiq.put, self.log)
-        self.worker.start()
+        self.worker = worker or Worker(self.on_worker, self.log)
+        if worker is None:
+            self.worker.start()
+        self.devices, self.device_idx = [], None
+        self.eq_wait = None          # (deadline, curve) after an EQ write from the page
+        self.rescan(devices)
 
-        self.controls = []
-        self._build()
-        self.set_connected(False)
-        self.rescan(initial=True)
-        self.root.after(50, self.poll)
+    # ----------------------------------------------------------- state
 
-    # ------------------------------------------------------------- styling
+    @staticmethod
+    def _blank():
+        return dict(conn="disconnected", msg="Not connected", battery=None, model=None, firmware=None,
+                    hardware=None, timer=None, anc_on=None, adaptive_on=None, level=0, anti_wind=None,
+                    eq=[0, 0, 0, 0, 0], toggles={t[0]: None for t in L.TOGGLES}, speech=None, call=None,
+                    poweroff_sent=False)
 
-    def _style(self):
-        s = ttk.Style(self.root)
-        s.theme_use("clam")
-        s.configure(".", background=C["bg"], foreground=C["ink"], font=(FONT, 10),
-                    fieldbackground=C["sunk"], bordercolor=C["rule_strong"], lightcolor=C["surface"],
-                    darkcolor=C["surface"], troughcolor=C["sunk"], focuscolor=C["copper"])
-        s.configure("Card.TFrame", background=C["surface"])
-        s.configure("Card.TLabel", background=C["surface"])
-        s.configure("Dim.TLabel", foreground=C["ink2"])
-        s.configure("CardDim.TLabel", background=C["surface"], foreground=C["ink2"], font=(FONT, 9))
-        s.configure("Head.TLabel", background=C["surface"], font=(FONT, 11, "bold"))
-        s.configure("Title.TLabel", font=(FONT, 16, "bold"))
-        s.configure("Big.TLabel", font=(FONT, 22, "bold"), foreground=C["copper"])
-        s.configure("TButton", background=C["sunk"], foreground=C["ink"], padding=(12, 6), borderwidth=0)
-        s.map("TButton", background=[("disabled", C["surface"]), ("active", C["rule_strong"])],
-              foreground=[("disabled", C["ink2"])])
-        s.configure("Accent.TButton", background=C["copper"], foreground=C["on_key"])
-        s.map("Accent.TButton", background=[("disabled", C["surface"]), ("active", "#E6A57A")])
-        s.configure("Danger.TButton", background=C["danger"], foreground=C["on_key"], font=(FONT, 10, "bold"))
-        s.map("Danger.TButton", background=[("disabled", C["surface"]), ("active", "#FF9A90")])
-        s.configure("Small.TButton", padding=(9, 5))
-        # Segmented buttons and On/Off pills: no indicator, the whole label changes colour.
-        s.layout("Seg.TRadiobutton", [("Radiobutton.padding", {"sticky": "nswe", "children": [
-            ("Radiobutton.label", {"sticky": "nswe"})]})])
-        s.configure("Seg.TRadiobutton", background=C["sunk"], foreground=C["ink"], padding=(10, 6), anchor="center")
-        s.layout("Switch.TCheckbutton", [("Checkbutton.padding", {"sticky": "nswe", "children": [
-            ("Checkbutton.label", {"sticky": "nswe"})]})])
-        s.configure("Switch.TCheckbutton", background=C["sunk"], foreground=C["ink2"], padding=(0, 4), width=5,
-                    anchor="center", font=(FONT, 9, "bold"))
-        s.map("Switch.TCheckbutton",
-              background=[("disabled", C["surface"]), ("selected", C["copper"]), ("active", C["rule_strong"])],
-              foreground=[("disabled", C["rule_strong"]), ("selected", C["on_key"])])
-        for o in ("Horizontal.TScale", "Vertical.TScale"):
-            s.configure(o, background=C["copper"], lightcolor=C["copper"], darkcolor=C["copper"],
-                        troughcolor=C["sunk"], bordercolor=C["surface"], gripcount=0)
-            s.map(o, background=[("disabled", C["rule_strong"])], lightcolor=[("disabled", C["rule_strong"])],
-                  darkcolor=[("disabled", C["rule_strong"])])
-        s.map("Seg.TRadiobutton", background=[("selected", C["copper"]), ("active", C["rule_strong"])],
-              foreground=[("selected", C["on_key"]), ("disabled", C["ink2"])])
-        s.configure("TNotebook", background=C["bg"], borderwidth=0, tabmargins=(0, 6, 0, 0))
-        s.configure("TNotebook.Tab", background=C["bg"], foreground=C["ink2"], padding=(14, 6), borderwidth=0)
-        s.map("TNotebook.Tab", background=[("selected", C["surface"])], foreground=[("selected", C["ink"])])
-        s.configure("TCombobox", foreground=C["ink"], arrowcolor=C["ink"], background=C["sunk"])
-        s.map("TCombobox", fieldbackground=[("readonly", C["sunk"])], foreground=[("disabled", C["ink2"])])
-        self.root.option_add("*TCombobox*Listbox.background", C["sunk"])
-        self.root.option_add("*TCombobox*Listbox.foreground", C["ink"])
-        self.root.option_add("*TCombobox*Listbox.selectBackground", C["copper"])
+    def snapshot(self):
+        with self.lock:
+            d = json.loads(json.dumps(self.s))
+            d["devices"] = [n for n, _a in self.devices]
+            d["device"] = self.device_idx
+            d["presets"] = {"builtin": [[n, list(g)] for n, g in L.BUILTIN_PRESETS],
+                            "custom": [[n, list(g)] for n, g in sorted(self.custom.items())]}
+            d["version"] = L.APP_VERSION
+            return d
 
-    def card(self, parent, title=None, pady=(0, 10)):
-        f = ttk.Frame(parent, style="Card.TFrame", padding=14)
-        f.pack(fill="x", pady=pady)
-        if title:
-            ttk.Label(f, text=title, style="Head.TLabel").pack(anchor="w", pady=(0, 8))
-        return f
+    def subscribe(self):
+        q = queue.Queue()
+        with self.lock:
+            self.clients.append(q)
+        return q
 
-    def scale(self, parent, lo, hi, var, orient="horizontal", step=1, length=None, on_release=None):
-        w = ttk.Scale(parent, from_=lo, to=hi, orient=orient, variable=var, length=length or 200)
+    def unsubscribe(self, q):
+        with self.lock:
+            if q in self.clients:
+                self.clients.remove(q)
 
-        def release(_e=None):
-            if w.instate(["disabled"]):
-                return
-            var.set(round(var.get() / step) * step)          # snap, then send once on release
-            if on_release:
-                on_release()
-        w.bind("<ButtonRelease-1>", release)
-        self.controls.append(w)
-        return w
+    def client_count(self):
+        with self.lock:
+            return len(self.clients)
 
-    def switch_row(self, parent, label, var, command):
-        """A label with an On/Off pill on the right (the Android app's switch rows)."""
-        row = ttk.Frame(parent, style="Card.TFrame")
-        row.pack(fill="x", pady=3)
-        ttk.Label(row, text=label, style="Card.TLabel").pack(side="left")
-        txt = tk.StringVar(value="Off")
-        var.trace_add("write", lambda *_a: txt.set("On" if var.get() else "Off"))
-        b = ttk.Checkbutton(row, textvariable=txt, variable=var, command=command, style="Switch.TCheckbutton")
-        b.pack(side="right")
-        self.controls.append(b)
-        return b
+    def broadcast(self):
+        payload = json.dumps(self.snapshot())
+        with self.lock:
+            for q in self.clients:
+                q.put(("state", payload))
 
-    # --------------------------------------------------------------- layout
+    def _on_log(self, line):
+        line = scrub(line)
+        payload = json.dumps(line)
+        with self.lock:
+            self.log_lines.append(line)
+            del self.log_lines[:-LOG_KEEP]
+            for q in self.clients:
+                q.put(("log", payload))
 
-    def _build(self):
-        top = ttk.Frame(self.root, padding=(16, 14, 16, 4))
-        top.pack(fill="x")
-        row = ttk.Frame(top)
-        row.pack(fill="x")
-        left = ttk.Frame(row)
-        left.pack(side="left", fill="x", expand=True)
-        ttk.Label(left, text="MOMENTUM 4", style="Title.TLabel").pack(anchor="w")
-        self.status = tk.StringVar(value="Not connected")
-        ttk.Label(left, textvariable=self.status, style="Dim.TLabel", wraplength=300).pack(anchor="w")
-        self.battery = tk.StringVar(value="")
-        ttk.Label(row, textvariable=self.battery, style="Big.TLabel").pack(side="right")
-
-        dev = ttk.Frame(top)
-        dev.pack(fill="x", pady=(10, 0))
-        self.device_var = tk.StringVar()
-        self.device_box = ttk.Combobox(dev, textvariable=self.device_var, state="readonly")
-        self.device_box.pack(side="left", fill="x", expand=True)
-        self.device_box.bind("<<ComboboxSelected>>", lambda _e: self.on_device_pick())
-        ttk.Button(dev, text="Rescan", command=self.rescan).pack(side="left", padx=(6, 0))
-        self.connect_btn = ttk.Button(dev, text="Connect", style="Accent.TButton", command=self.on_connect)
-        self.connect_btn.pack(side="left", padx=(6, 0))
-
-        nb = self.nb = ttk.Notebook(self.root)
-        nb.pack(fill="both", expand=True, padx=16, pady=(8, 16))
-        self.tab_sound = ttk.Frame(nb, padding=(0, 10, 0, 0))
-        self.tab_settings = ttk.Frame(nb, padding=(0, 10, 0, 0))
-        self.tab_power = ttk.Frame(nb, padding=(0, 10, 0, 0))
-        self.tab_log = ttk.Frame(nb, padding=(0, 10, 0, 0))
-        for t, name in ((self.tab_sound, "Sound"), (self.tab_settings, "Settings"),
-                        (self.tab_power, "Power"), (self.tab_log, "Log")):
-            nb.add(t, text=name)
-        self._build_sound()
-        self._build_settings()
-        self._build_power()
-        self._build_log()
-
-    def _build_sound(self):
-        nc = self.card(self.tab_sound, "Noise control")
-        seg = self.noise_seg = ttk.Frame(nc, style="Card.TFrame")
-        seg.pack(fill="x")
-        self.noise_var = tk.StringVar(value="")
-        for i, name in enumerate(L.NOISE_MODES):
-            b = ttk.Radiobutton(seg, text=name, value=name, variable=self.noise_var, style="Seg.TRadiobutton",
-                                command=self.on_noise)
-            b.pack(side="left", fill="x", expand=True, padx=(0 if i == 0 else 4, 0))
-            self.controls.append(b)
-        self.custom_box = ttk.Frame(nc, style="Card.TFrame")
-        ttk.Label(self.custom_box, text="ANC to transparency", style="CardDim.TLabel").pack(anchor="w", pady=(10, 2))
-        self.level_var = tk.IntVar(value=0)
-        self.scale(self.custom_box, 0, 100, self.level_var, on_release=self.on_level).pack(fill="x")
-        ends = ttk.Frame(self.custom_box, style="Card.TFrame")
-        ends.pack(fill="x")
-        ttk.Label(ends, text="ANC", style="CardDim.TLabel").pack(side="left")
-        ttk.Label(ends, text="Transparency", style="CardDim.TLabel").pack(side="right")
-        ttk.Label(nc, text="Anti-wind", style="CardDim.TLabel").pack(anchor="w", pady=(12, 4))
-        aw = ttk.Frame(nc, style="Card.TFrame")
-        aw.pack(fill="x")
-        self.wind_var = tk.StringVar(value="")
-        for i, name in enumerate(L.ANTI_WIND):
-            b = ttk.Radiobutton(aw, text=name, value=name, variable=self.wind_var, style="Seg.TRadiobutton",
-                                command=self.on_wind)
-            b.pack(side="left", fill="x", expand=True, padx=(0 if i == 0 else 4, 0))
-            self.controls.append(b)
-
-        eq = self.card(self.tab_sound, "Equaliser")
-        prow = ttk.Frame(eq, style="Card.TFrame")
-        prow.pack(fill="x")
-        self.preset_var = tk.StringVar(value="")
-        self.preset_box = ttk.Combobox(prow, textvariable=self.preset_var, state="readonly", width=14)
-        self.preset_box.pack(side="left", fill="x", expand=True)
-        self.preset_box.bind("<<ComboboxSelected>>", lambda _e: self.on_preset())
-        self.controls.append(self.preset_box)
-        for text, cmd in (("Save", self.on_save_preset), ("Delete", self.on_delete_preset), ("Flat", self.on_flat)):
-            b = ttk.Button(prow, text=text, command=cmd, style="Small.TButton")
-            b.pack(side="left", padx=(6, 0))
-            self.controls.append(b)
-        self.refresh_preset_list()
-        faders = ttk.Frame(eq, style="Card.TFrame")
-        faders.pack(fill="x", pady=(10, 0))
-        self.band_vars, self.band_labels = [], []
-        for i, name in enumerate(L.BANDS):
-            col = ttk.Frame(faders, style="Card.TFrame")
-            col.pack(side="left", fill="x", expand=True)
-            v = tk.DoubleVar(value=0.0)
-            lab = tk.StringVar(value="0.0")
-            ttk.Label(col, textvariable=lab, style="Card.TLabel", font=(FONT, 9)).pack()
-            self.scale(col, 6.0, -6.0, v, orient="vertical", step=0.5, length=150,
-                       on_release=lambda b=i: self.on_band(b)).pack()
-            v.trace_add("write", lambda *_a, v=v, lab=lab: lab.set("%+.1f" % (round(v.get() * 2) / 2) if round(v.get() * 2) else "0.0"))
-            ttk.Label(col, text=name, style="CardDim.TLabel").pack()
-            self.band_vars.append(v)
-        self.toggle_vars = {}
-        ttk.Frame(eq, style="Card.TFrame", height=6).pack()
-        self._toggle(eq, "bass")
-
-    def _toggle(self, parent, key):
-        _k, label, _s, _g, _inv = L.TOGGLE_BY_KEY[key]
-        v = tk.BooleanVar(value=False)
-        self.toggle_vars[key] = v
-        return self.switch_row(parent, label, v, lambda: self.on_toggle(key))
-
-    def _build_settings(self):
-        lc = self.card(self.tab_settings, "Listening")
-        for key in ("smart_pause", "on_head", "touch", "low_latency", "hires"):
-            self._toggle(lc, key)
-        self.speech_var = tk.BooleanVar(value=False)
-        self.speech_btn = self.switch_row(lc, "Speech clarity", self.speech_var, self.on_speech)
-        self.speech_hint = ttk.Label(lc, text="Speech clarity needs Hi-Res off.", style="CardDim.TLabel")
-        self.speech_hint.pack(anchor="w")
-        ttk.Label(lc, text="Low latency comes from Sennheiser's older app. Its effect is not measured yet.",
-                  style="CardDim.TLabel", wraplength=360).pack(anchor="w", pady=(6, 0))
-
-        cc = self.card(self.tab_settings, "Calls")
-        for key in ("auto_answer", "comfort_call"):
-            self._toggle(cc, key)
-        self.call_label = tk.StringVar(value="Transparency during calls: -")
-        ttk.Label(cc, textvariable=self.call_label, style="CardDim.TLabel").pack(anchor="w", pady=(8, 2))
-        self.call_var = tk.IntVar(value=0)
-        self.scale(cc, 0, 4, self.call_var, on_release=self.on_call).pack(fill="x")
-
-    def _build_power(self):
-        pc = self.card(self.tab_power, "Power off")
-        ttk.Label(pc, style="Card.TLabel", wraplength=380, justify="left",
-                  text="Switches the headphones fully off, the same as holding the button or closing "
-                       "the case. Bluetooth goes off too. Press the button to turn them on again.").pack(anchor="w")
-        self.power_btn = ttk.Button(pc, text="Power off now", style="Danger.TButton", command=self.on_power)
-        self.power_btn.pack(fill="x", pady=(12, 0))
-        self.controls.append(self.power_btn)
-
-        ic = self.card(self.tab_power, "Headphones")
-        self.info_var = tk.StringVar(value="Connect to read model and firmware.")
-        ttk.Label(ic, textvariable=self.info_var, style="Card.TLabel", justify="left").pack(anchor="w")
-        ttk.Label(ic, style="CardDim.TLabel", wraplength=380, justify="left",
-                  text="The built-in auto-off timer only reaches a standby that keeps Bluetooth on. "
-                       "Automatic power-off when idle is in the Android app for now.").pack(anchor="w", pady=(8, 0))
-
-    def _build_log(self):
-        bar = ttk.Frame(self.tab_log)
-        bar.pack(fill="x", pady=(0, 8))
-        ttk.Button(bar, text="Copy report", style="Accent.TButton", command=self.copy_report).pack(side="left")
-        ttk.Button(bar, text="Open log folder", command=lambda: os.startfile(LOG_DIR)).pack(side="left", padx=(6, 0))
-        self.log_text = tk.Text(self.tab_log, bg=C["surface"], fg=C["ink2"], insertbackground=C["ink"],
-                                relief="flat", font=("Consolas", 9), wrap="none", height=20)
-        self.log_text.pack(fill="both", expand=True)
-        self.log_text.configure(state="disabled")
-
-    # --------------------------------------------------------------- state
-
-    def set_enabled(self, w, on):
+    def _load_settings(self):
         try:
-            w.state(["!disabled"] if on else ["disabled"])
-        except AttributeError:
-            w.configure(state="normal" if on else "disabled")
+            with open(self.settings_path, encoding="utf-8") as f:
+                s = json.load(f)
+            return s if isinstance(s, dict) else {}
+        except (OSError, ValueError):
+            return {}
 
-    def set_connected(self, on):
-        self.connected = on
-        for w in self.controls:
-            self.set_enabled(w, on)
-        if on:
-            self.apply_speech_rule()
-        self.connect_btn.configure(text="Disconnect" if on else "Connect")
-        if not on:
-            self.battery.set("")
+    def _save_settings(self):
+        os.makedirs(self.app_dir, exist_ok=True)
+        tmp = self.settings_path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(self.settings, f, indent=2)
+        os.replace(tmp, self.settings_path)
 
-    def apply_speech_rule(self):
-        ok = self.connected and self.hires_on is False
-        self.set_enabled(self.speech_btn, ok)
-        if self.hires_on:
-            self.speech_hint.pack(anchor="w", after=self.speech_btn.master)
+    # ---------------------------------------------------- from the worker
+
+    def on_worker(self, item):
+        with self.lock:
+            if item[0] == "frame":
+                self.apply(L.decode(item[1]))
+            elif item[0] == "state":
+                self._state(item[1], item[2])
+        self.broadcast()
+
+    def _state(self, name, text):
+        s = self.s
+        if name == "connecting":
+            s["conn"], s["msg"] = "connecting", "Connecting..."
+        elif name == "connected":
+            self.s = s = self._blank()
+            s["conn"], s["msg"] = "connected", "Connected"
+        elif name == "poweroff_sent":
+            s["poweroff_sent"] = True
+            s["msg"] = "Power off sent. Press the button on the headphones to turn them on."
         else:
-            self.speech_hint.pack_forget()
-
-    def render_status(self):
-        if not self.connected:
-            return
-        parts = ["Connected"]
-        if "firmware" in self.info:
-            parts.append("fw " + self.info["firmware"])
-        self.status.set(" · ".join(parts))
-        lines = []
-        for key, label in (("model", "Model"), ("firmware", "Firmware"), ("hardware", "Hardware"),
-                           ("battery", "Battery")):
-            if key in self.info:
-                lines.append("%s: %s%s" % (label, self.info[key], " %" if key == "battery" else ""))
-        if "timer" in self.info:
-            t = self.info["timer"]
-            lines.append("Built-in auto-off timer: %s" % ("off" if t == 0 else "%d min" % (t // 60) if t % 60 == 0
-                                                          else "%d s" % t))
-        self.info_var.set("\n".join(lines) or "Reading...")
+            s["conn"] = "disconnected"
+            if s["poweroff_sent"]:
+                s["msg"] = "Switched off. Press the button on the headphones to turn them on."
+            elif name == "failed":
+                s["msg"] = "Couldn't connect. Are the headphones on and paired with this PC?"
+            elif name == "dropped":
+                s["msg"] = "Disconnected. %s" % (text or "")
+            else:
+                s["msg"] = "Not connected"
 
     def apply(self, d):
+        s = self.s
         if "error" in d:
             base, code = d["error"]
             self.log.note("headphones refused %04X (code %s)" % (base, "%02X" % code if code is not None else "?"))
             if base == 0x0803 and code != 0x80:
-                self.send(L.speech_frames(self.speech_var.get())[1:])   # read the real sound mode back
+                self.send([L.req(0x0804)])           # read the real sound mode back (T39)
             return
-        for key in ("battery", "model", "firmware", "hardware", "timer"):
+        for key in ("battery", "model", "firmware", "hardware", "timer", "anc_on", "adaptive_on",
+                    "level", "anti_wind", "speech"):
             if key in d:
-                self.info[key] = d[key]
-        if "battery" in d:
-            self.battery.set("%d %%" % d["battery"])
-        if "anc_on" in d:
-            self.anc_on = d["anc_on"]
-        if "adaptive_on" in d:
-            self.adaptive_on = d["adaptive_on"]
-        if ("anc_on" in d or "adaptive_on" in d) and self.anc_on is not None:
-            self.show_noise(L.noise_mode_index(self.anc_on, bool(self.adaptive_on)))
-        if "anti_wind" in d:
-            self.wind_var.set(L.ANTI_WIND[d["anti_wind"]])
-        if "level" in d:
-            self.level_var.set(d["level"])
-        if "eq" in d:
-            self.set_curve(d["eq"])
+                s[key] = d[key]
         if "call_transparency" in d:
-            self.call_var.set(d["call_transparency"])
-            self.call_label.set("Transparency during calls: %d / 4" % d["call_transparency"])
-        if "speech" in d:
-            self.speech_var.set(d["speech"])
-        for key, v in self.toggle_vars.items():
+            s["call"] = d["call_transparency"]
+        if "eq" in d:
+            # The headset reports the whole curve after each band write. For 1 s after the page
+            # wrote a curve, skip the in-between ones so the faders don't jump back and forth.
+            got = list(d["eq"])
+            if self.eq_wait and time.monotonic() < self.eq_wait[0] and got != self.eq_wait[1]:
+                pass
+            else:
+                self.eq_wait = None
+                s["eq"] = got
+        for key in s["toggles"]:
             if key in d:
-                v.set(d[key])
-        if "hires" in d:
-            self.hires_on = d["hires"]
-            self.apply_speech_rule()
-        self.render_status()
+                s["toggles"][key] = d[key]
 
-    def show_noise(self, idx):
-        self.noise_var.set(L.NOISE_MODES[idx])
-        if idx == 1:
-            self.custom_box.pack(fill="x", after=self.noise_seg)
-        else:
-            self.custom_box.pack_forget()
-
-    def curve(self):
-        return tuple(L.clamp_gain(round(v.get() * 10)) for v in self.band_vars)
-
-    def set_curve(self, gains10):
-        for v, g in zip(self.band_vars, gains10):
-            v.set(g / 10.0)
-        self.preset_var.set(L.preset_name(gains10, self.custom_presets) or "Custom curve")
-
-    def refresh_preset_list(self):
-        self.preset_box.configure(values=[n for n, _g in L.BUILTIN_PRESETS] + sorted(self.custom_presets))
-
-    # ------------------------------------------------------------ actions
+    # ----------------------------------------------------- from the page
 
     def send(self, frames):
-        if self.connected and frames:
-            self.worker.put("send", frames)
+        if self.s["conn"] == "connected" and frames:
+            self.worker.put("send", list(frames))
 
-    def safe(self, fn, *args):
+    def handle(self, a):
+        """One action from the page. Returns a JSON-able dict; never raises on bad input."""
         try:
-            self.send(fn(*args))
-        except L.Refused as e:
-            self.log.note(str(e))
-            self.status.set("Not sent: %s" % e)
+            with self.lock:
+                res = self._handle(a if isinstance(a, dict) else {})
+        except (L.Refused, ValueError, TypeError, KeyError, IndexError) as e:
+            self.log.note("action refused: %s" % e)
+            res = {"ok": False, "error": str(e)}
+        self.broadcast()
+        return res
 
-    def on_noise(self):
-        idx = L.NOISE_MODES.index(self.noise_var.get())
-        self.anc_on, self.adaptive_on = idx != 2, idx == 0
-        self.show_noise(idx)
-        self.safe(L.noise_frames, idx, self.level_var.get())
-
-    def on_level(self):
-        self.safe(L.level_frames, self.level_var.get())
-
-    def on_wind(self):
-        self.safe(lambda: [L.anti_wind_frame(L.ANTI_WIND.index(self.wind_var.get()))])
-
-    def on_band(self, band):
-        g = self.curve()
-        self.preset_var.set(L.preset_name(g, self.custom_presets) or "Custom curve")
-        self.safe(lambda: [L.eq_band_frame(band, g[band])])
-
-    def on_preset(self):
-        name = self.preset_var.get()
-        gains = dict(L.BUILTIN_PRESETS).get(name) or self.custom_presets.get(name)
-        if gains:
-            self.set_curve(gains)
-            self.safe(L.eq_curve_frames, gains)
-
-    def on_flat(self):
-        self.set_curve((0, 0, 0, 0, 0))
-        self.safe(L.eq_curve_frames, (0, 0, 0, 0, 0))
-
-    def on_save_preset(self):
-        name = simpledialog.askstring("Save preset", "Name for this curve:", parent=self.root)
-        if not name or not name.strip():
-            return
-        name = name.strip()[:30]
-        if name in dict(L.BUILTIN_PRESETS):
-            messagebox.showinfo(APP_NAME, "That name is a built-in preset. Pick another name.", parent=self.root)
-            return
-        self.custom_presets[name] = self.curve()
-        self._store_presets()
-        self.preset_var.set(name)
-
-    def on_delete_preset(self):
-        name = self.preset_var.get()
-        if name not in self.custom_presets:
-            messagebox.showinfo(APP_NAME, "Only your own presets can be deleted.", parent=self.root)
-            return
-        if messagebox.askyesno(APP_NAME, "Delete preset \"%s\"?" % name, parent=self.root):
-            del self.custom_presets[name]
+    def _handle(self, a):
+        act = a.get("action")
+        s = self.s
+        if act == "connect":
+            idx = a.get("device", self.device_idx)
+            if idx is None or not 0 <= int(idx) < len(self.devices):
+                return {"ok": False, "error": "Pick the headphones first."}
+            self.device_idx = int(idx)
+            self.settings["address"] = self.devices[self.device_idx][1]
+            self._save_settings()
+            s["poweroff_sent"] = False
+            self.worker.put("connect", self.devices[self.device_idx][1])
+            return {"ok": True}
+        if act == "disconnect":
+            self.worker.put("disconnect")
+            return {"ok": True}
+        if act == "rescan":
+            self.rescan()
+            return {"ok": True}
+        if act == "report":
+            return {"ok": True, "text": self.report()}
+        if act == "open_logs":
+            if hasattr(os, "startfile"):
+                os.startfile(os.path.join(self.app_dir, "logs"))
+            return {"ok": True}
+        if act == "save_preset":
+            name = str(a.get("name", "")).strip()[:30]
+            gains = [L.clamp_gain(int(g)) for g in a["gains"]][:5]
+            if not name or len(gains) != 5:
+                return {"ok": False, "error": "Give the preset a name."}
+            if name in dict(L.BUILTIN_PRESETS):
+                return {"ok": False, "error": "That's a built-in preset. Pick another name."}
+            self.custom[name] = gains
             self._store_presets()
-            self.preset_var.set(L.preset_name(self.curve(), self.custom_presets) or "Custom curve")
+            return {"ok": True}
+        if act == "delete_preset":
+            self.custom.pop(str(a.get("name")), None)
+            self._store_presets()
+            return {"ok": True}
+        if s["conn"] != "connected":
+            return {"ok": False, "error": "Connect first."}
+        if act == "noise":
+            mode = int(a["mode"])
+            if not 0 <= mode <= 2:
+                raise ValueError("bad noise mode")
+            self.send(L.noise_frames(mode, s["level"]))
+            s["anc_on"], s["adaptive_on"] = mode != 2, mode == 0
+        elif act == "level":
+            s["level"] = max(0, min(100, int(a["value"])))
+            self.send(L.level_frames(s["level"]))
+        elif act == "wind":
+            idx = int(a["index"])
+            self.send([L.anti_wind_frame(idx)])
+            s["anti_wind"] = idx
+        elif act == "band":
+            frames = []
+            for band, gain in a["changes"][:5]:
+                band, gain = int(band), L.clamp_gain(int(gain))
+                frames.append(L.eq_band_frame(band, gain))
+                s["eq"][band] = gain
+            self.send(frames)
+            self.eq_wait = (time.monotonic() + 1.0, list(s["eq"]))
+        elif act == "preset":
+            gains = [L.clamp_gain(int(g)) for g in a["gains"]]
+            if len(gains) != 5:
+                raise ValueError("a curve has 5 bands")
+            self.send(L.eq_curve_frames(gains))
+            s["eq"] = gains
+            self.eq_wait = (time.monotonic() + 1.0, list(gains))
+        elif act == "toggle":
+            key, on = str(a["key"]), bool(a["on"])
+            self.send(L.toggle_frames(key, on))
+            s["toggles"][key] = on
+        elif act == "speech":
+            self.send(L.speech_frames(bool(a["on"])))
+        elif act == "call":
+            v = max(0, min(4, int(a["value"])))
+            self.send(L.call_transparency_frames(v))
+            s["call"] = v
+        elif act == "poweroff":
+            if a.get("confirmed") is not True:
+                return {"ok": False, "error": "Power off needs a confirm."}
+            self.worker.put("poweroff")
+        else:
+            return {"ok": False, "error": "unknown action"}
+        return {"ok": True}
 
     def _store_presets(self):
-        self.settings["presets"] = {k: list(v) for k, v in self.custom_presets.items()}
-        save_settings(self.settings)
-        self.refresh_preset_list()
+        self.settings["presets"] = {k: list(v) for k, v in self.custom.items()}
+        self._save_settings()
 
-    def on_toggle(self, key):
-        self.safe(L.toggle_frames, key, self.toggle_vars[key].get())
-        if key == "hires":
-            self.hires_on = self.toggle_vars[key].get()
-            self.apply_speech_rule()
-
-    def on_speech(self):
-        self.safe(L.speech_frames, self.speech_var.get())
-
-    def on_call(self):
-        self.call_label.set("Transparency during calls: %d / 4" % self.call_var.get())
-        self.safe(L.call_transparency_frames, self.call_var.get())
-
-    def on_power(self):
-        if not self.connected:
-            return
-        if messagebox.askyesno("Power off", "Switch the headphones fully off?\n\n"
-                               "They disconnect from every device. Press the button on the headphones "
-                               "to turn them on again.", icon="warning", parent=self.root):
-            self.worker.put("poweroff")
-
-    # ------------------------------------------------------------ devices
-
-    def rescan(self, initial=False):
-        self.devices = L.paired_devices()
-        known = {a.upper() for _n, a in self.devices}
-        cli = G.default_addr()                           # M4_ADDR or m4_addr.txt, like the CLI
-        if cli and cli.upper() not in known and L.format_addr(cli.replace(":", "")):
-            self.devices.append(("Address from M4_ADDR / m4_addr.txt", cli.upper()))
-        names, seen = [], {}
-        for n, _a in self.devices:
+    def rescan(self, devices=None):
+        devs = list(devices) if devices is not None else L.paired_devices()
+        known = {a.upper() for _n, a in devs}
+        cli = G.default_addr()                                 # M4_ADDR or m4_addr.txt, like the CLI
+        if cli and L.format_addr(cli) and L.format_addr(cli) not in known:
+            devs.append(("Headphones from m4_addr.txt", L.format_addr(cli)))
+        seen, named = {}, []
+        for n, a in devs:
             seen[n] = seen.get(n, 0) + 1
-            names.append(n if seen[n] == 1 else "%s (%d)" % (n, seen[n]))
-        self.device_box.configure(values=names)
-        idx = L.pick_default(self.devices, self.settings.get("address"))
-        if idx is None:
-            self.device_var.set("")
-            self.status.set("No paired Bluetooth devices. Pair the headphones in Windows Settings, then Rescan.")
-            return
-        self.device_box.current(idx)
-        if initial and ("MOMENTUM" in self.devices[idx][0].upper() or self.settings.get("address")):
-            self.root.after(300, self.on_connect)          # auto-connect while the app is open (as Android 0.14.2)
+            named.append((n if seen[n] == 1 else "%s (%d)" % (n, seen[n]), a))
+        self.devices = named
+        self.device_idx = L.pick_default(named, self.settings.get("address"))
+        if not named:
+            self.s["msg"] = "No paired Bluetooth devices. Pair the headphones in Windows Settings."
 
-    def selected_addr(self):
-        i = self.device_box.current()
-        return self.devices[i][1] if 0 <= i < len(self.devices) else None
+    def should_autoconnect(self):
+        if self.device_idx is None:
+            return False
+        return "MOMENTUM" in self.devices[self.device_idx][0].upper() or bool(self.settings.get("address"))
 
-    def on_device_pick(self):
-        addr = self.selected_addr()
-        if addr:
-            self.settings["address"] = addr
-            save_settings(self.settings)
-        if self.connected:
-            self.worker.put("connect", addr)
-
-    def on_connect(self):
-        if self.connected:
-            self.worker.put("disconnect")
-            return
-        addr = self.selected_addr()
-        if not addr:
-            self.status.set("Pick the headphones first.")
-            return
-        self.settings["address"] = addr
-        save_settings(self.settings)
-        self.poweroff_sent = False
-        self.worker.put("connect", addr)
-
-    # ------------------------------------------------------------ plumbing
-
-    def poll(self):
-        try:
-            while True:
-                item = self.uiq.get_nowait()
-                kind = item[0]
-                if kind == "frame":
-                    self.apply(L.decode(item[1]))
-                elif kind == "log":
-                    self.add_log(item[1])
-                elif kind == "state":
-                    self.on_state(item[1], item[2])
-        except queue.Empty:
-            pass
-        self.root.after(50, self.poll)
-
-    def on_state(self, name, text):
-        if name == "connecting":
-            self.status.set("Connecting...")
-            self.set_enabled(self.connect_btn, False)
-            return
-        self.set_enabled(self.connect_btn, True)
-        if name == "connected":
-            self.info = {}
-            self.set_connected(True)
-            self.status.set("Connected, reading settings...")
-        elif name == "poweroff_sent":
-            self.poweroff_sent = True
-            self.status.set("Power off sent. Press the button on the headphones to turn them on.")
-        else:
-            self.set_connected(False)
-            if self.poweroff_sent:
-                self.status.set("Switched off. Press the button on the headphones to turn them on.")
-            elif name == "failed":
-                self.status.set("Couldn't connect. Check the headphones are on and paired with this PC, "
-                                "and close other apps on this PC that control them.")
-            elif name == "dropped":
-                self.status.set("Disconnected. %s" % (text or ""))
-            else:
-                self.status.set("Not connected")
-
-    def add_log(self, line):
-        self.log_lines.append(line)
-        del self.log_lines[:-500]
-        self.log_text.configure(state="normal")
-        self.log_text.insert("end", line + "\n")
-        if int(self.log_text.index("end-1c").split(".")[0]) > 600:
-            self.log_text.delete("1.0", "100.0")
-        self.log_text.see("end")
-        self.log_text.configure(state="disabled")
-
-    def copy_report(self):
-        i = self.info
-        lines = ["M4 Control %s (Windows app, early version)" % L.APP_VERSION,
+    def report(self):
+        s = self.s
+        lines = ["M4 Control %s (Windows app)" % L.APP_VERSION,
                  "PC: %s, Python %s" % (platform.platform(), platform.python_version()),
-                 "Headphones: %s" % ("connected" if self.connected else "not connected"),
+                 "Headphones: %s" % s["conn"],
                  "Model: %s, firmware: %s, hardware: %s, battery: %s" % (
-                     i.get("model", "?"), i.get("firmware", "?"), i.get("hardware", "?"), i.get("battery", "?")),
+                     s["model"] or "?", s["firmware"] or "?", s["hardware"] or "?",
+                     "?" if s["battery"] is None else "%d %%" % s["battery"]),
                  "", "Log (last 80 lines):"] + self.log_lines[-80:]
-        self.root.clipboard_clear()
-        self.root.clipboard_append(scrub("\n".join(lines)))
-        self.status.set("Report copied. It has no Bluetooth address or device names.")
+        return scrub("\n".join(lines))
 
-    def quit(self):
+    def close(self):
         self.worker.put("quit")
-        self.worker.join(timeout=1.5)
-        self.root.destroy()
 
 
-def main():
-    if sys.platform.startswith("win"):
+# --------------------------------------------------------------- HTTP
+
+class Server(http.server.ThreadingHTTPServer):
+    daemon_threads = True
+
+    def __init__(self, core, token):
+        super().__init__(("127.0.0.1", 0), Handler)
+        self.core = core
+        self.token = token
+
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    server_version = "M4Control"
+
+    def log_message(self, *_a):
+        pass
+
+    def _allowed(self):
+        """Only this app's own page: right Host (no DNS rebinding), same Origin, and the token."""
+        port = self.server.server_port
+        if self.headers.get("Host") != "127.0.0.1:%d" % port:
+            return False
+        origin = self.headers.get("Origin")
+        if origin and origin != "http://127.0.0.1:%d" % port:
+            return False
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        return secrets.compare_digest(q.get("t", [""])[0], self.server.token)
+
+    def _reply(self, code, body, ctype, extra=None):
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        for k, v in (extra or {}).items():
+            self.send_header(k, v)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        if not self._allowed():
+            return self._reply(403, b"forbidden", "text/plain")
+        path = urllib.parse.urlparse(self.path).path
+        if path == "/ping":
+            return self._reply(200, b"m4", "text/plain")
+        if path == "/":
+            with open(UI_FILE, "rb") as f:
+                body = f.read()
+            return self._reply(200, body, "text/html; charset=utf-8", {
+                "Content-Security-Policy": "default-src 'self'; script-src 'unsafe-inline'; "
+                                           "style-src 'unsafe-inline'; img-src 'self' data:; "
+                                           "connect-src 'self'; frame-ancestors 'none'"})
+        if path == "/events":
+            return self._events()
+        return self._reply(404, b"not found", "text/plain")
+
+    def do_POST(self):
+        if not self._allowed() or urllib.parse.urlparse(self.path).path != "/api":
+            return self._reply(403, b"forbidden", "text/plain")
         try:
-            import ctypes
-            ctypes.windll.shcore.SetProcessDpiAwareness(1)   # sharp text on scaled displays
-        except Exception:
+            n = int(self.headers.get("Content-Length", "0"))
+            data = json.loads(self.rfile.read(min(n, 65536)) or b"{}")
+        except ValueError:
+            data = {}
+        res = self.server.core.handle(data)
+        return self._reply(200, json.dumps(res).encode(), "application/json")
+
+    def _events(self):
+        core = self.server.core
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        q = core.subscribe()
+        try:
+            self._event("state", json.dumps(core.snapshot()))
+            with core.lock:
+                lines = json.dumps(core.log_lines[-200:])
+            self._event("logs", lines)
+            while True:
+                try:
+                    kind, payload = q.get(timeout=4)
+                except queue.Empty:
+                    self.wfile.write(b": ping\n\n")
+                    self.wfile.flush()
+                    continue
+                self._event(kind, payload)
+        except OSError:
             pass
-    App().root.mainloop()
+        finally:
+            core.unsubscribe(q)
+
+    def _event(self, kind, payload):
+        self.wfile.write(("event: %s\ndata: %s\n\n" % (kind, payload)).encode())
+        self.wfile.flush()
+
+
+# ------------------------------------------------------------ window
+
+def find_browser():
+    for env in ("ProgramFiles(x86)", "ProgramFiles", "LOCALAPPDATA"):
+        root = os.environ.get(env)
+        if not root:
+            continue
+        for rel in (r"Microsoft\Edge\Application\msedge.exe", r"Google\Chrome\Application\chrome.exe"):
+            p = os.path.join(root, rel)
+            if os.path.isfile(p):
+                return p
+    return None
+
+
+def open_window(url):
+    exe = find_browser()
+    if exe:
+        subprocess.Popen([exe, "--app=" + url, "--window-size=440,920",
+                          "--user-data-dir=" + os.path.join(APP_DIR, "window"),
+                          "--no-first-run", "--no-default-browser-check", "--disable-extensions"])
+    else:
+        webbrowser.open(url)
+
+
+def running_instance():
+    """URL of an instance that is already running, else None."""
+    try:
+        with open(os.path.join(APP_DIR, "running.json"), encoding="utf-8") as f:
+            r = json.load(f)
+        base = "http://127.0.0.1:%d/" % int(r["port"])
+        with urllib.request.urlopen(base + "ping?t=" + r["token"], timeout=1) as resp:
+            return base + "?t=" + r["token"] if resp.read() == b"m4" else None
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def lifecycle(core, server, started):
+    """Quit when the window has been gone for 10 s (or never opened within 90 s)."""
+    seen, idle_since = False, None
+    while True:
+        time.sleep(1)
+        now = time.monotonic()
+        if core.client_count():
+            seen, idle_since = True, None
+            continue
+        if seen:
+            idle_since = idle_since or now
+            if now - idle_since > 10:
+                break
+        elif now - started > 90:
+            break
+    server.shutdown()
+
+
+def main(open_ui=True):
+    url = running_instance() if sys.platform.startswith("win") else None
+    if url:
+        if open_ui:
+            open_window(url)
+        return
+    core = Core()
+    token = secrets.token_urlsafe(24)
+    server = Server(core, token)
+    url = "http://127.0.0.1:%d/?t=%s" % (server.server_port, token)
+    run_file = os.path.join(APP_DIR, "running.json")
+    os.makedirs(APP_DIR, exist_ok=True)
+    with open(run_file, "w", encoding="utf-8") as f:
+        json.dump({"port": server.server_port, "token": token}, f)
+    if core.should_autoconnect():
+        core.handle({"action": "connect"})
+    if open_ui:
+        open_window(url)
+    threading.Thread(target=lifecycle, args=(core, server, time.monotonic()), daemon=True).start()
+    try:
+        server.serve_forever()
+    finally:
+        core.close()
+        try:
+            os.remove(run_file)
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":
