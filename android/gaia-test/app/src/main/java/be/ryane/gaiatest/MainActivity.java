@@ -85,6 +85,12 @@ public class MainActivity extends Activity {
     private Segmented antiWind;
     private View customBlock;
     private SeekBar transpSeek, callSeek;
+    private Segmented promptSeg;
+    private int batteryPct = -1;
+    private boolean charging;
+    private LinearLayout peersBox;
+    private int ownPeer = -1;
+    private final java.util.TreeMap<Integer, String[]> peers = new java.util.TreeMap<>();   // index -> {name, connected}; names never logged
     private TextView transpValue, callValue;
     private Switch swSmartPause, swAutoAnswer, swLowLatency, swHiRes, swOnHead, swAutoStart;
     private Switch swBass, swSpeech, swComfort, swTouch;
@@ -522,6 +528,14 @@ public class MainActivity extends Activity {
         ends.addView(caption("ANC"), new LinearLayout.LayoutParams(0, -2, 1f));
         ends.addView(caption("Transparency"));
         b.addView(ends);
+        Button full = outlineBtn("Full transparency", v -> {
+            send(a(0x1A02, 100)); send(g(0x1A03));
+            applying = true; transpSeek.setProgress(100); applying = false;
+        });
+        gate(full);
+        LinearLayout.LayoutParams fp = new LinearLayout.LayoutParams(-1, dp(44));
+        fp.topMargin = dp(10);
+        b.addView(full, fp);
         TextView aw = label("Anti-wind");
         aw.setPadding(0, dp(14), 0, dp(8));
         b.addView(aw);
@@ -730,6 +744,13 @@ public class MainActivity extends Activity {
         vHardware = valueRowG(info, R.drawable.ic_info, "Hardware");
         shapeGroup(info);
 
+        LinearLayout pg = group(c, "Paired with the headphones");
+        peersBox = new LinearLayout(this);
+        peersBox.setOrientation(LinearLayout.VERTICAL);
+        pg.addView(peersBox);
+        showPeers();
+        shapeGroup(pg);
+
         LinearLayout tools = group(c, "Tools");
         navRow(tools, R.drawable.ic_list, "Guard log", "Shows in the log below", v -> append(AutoOffService.getLog()));
         navRow(tools, R.drawable.ic_report, "Copy report", "For bug reports. No Bluetooth addresses, no other device names.", v -> copyReport());
@@ -757,6 +778,9 @@ public class MainActivity extends Activity {
         guardUnit = caption("minutes idle, then fully off");
         guardUnit.setPadding(0, dp(10), 0, 0);
         big.addView(guardUnit);
+        TextView only = caption("The guard only sees this phone. If you also listen on a PC or tablet, it can switch the headphones off.");
+        only.setPadding(0, dp(10), 0, 0);
+        big.addView(only);
         c.addView(big);
 
         LinearLayout st = group(c, "Status");
@@ -1056,7 +1080,7 @@ public class MainActivity extends Activity {
         LinearLayout c = subPage("Listening", null, true);
         LinearLayout pb = group(c, "Playback");
         swSmartPause = switchRowG(pb, R.drawable.ic_pause, "Smart pause", "Pause when you take them off", on -> toggle(0x080C, on));
-        swLowLatency = switchRowG(pb, R.drawable.ic_bolt, "Low latency", null, on -> toggle(0x0817, on));
+        swLowLatency = switchRowG(pb, R.drawable.ic_bolt, "Low latency", "From Sennheiser's older app. Effect not measured yet.", on -> toggle(0x0817, on));
         swHiRes = switchRowG(pb, R.drawable.ic_hires, "Hi-Res 24/96", "Takes effect after a restart",
                 on -> { send(a(0x0405, on ? 0 : 1)); send(g(0x0406)); applySpeechRule(); });   // 0 = Hi-Res on
         shapeGroup(pb);
@@ -1073,6 +1097,20 @@ public class MainActivity extends Activity {
         callValue = tv[0];
         calls.addView(ct);
         shapeGroup(calls);
+
+        LinearLayout snd = group(c, "Sounds");
+        LinearLayout pr = new LinearLayout(this);
+        pr.setOrientation(LinearLayout.VERTICAL);
+        pr.setPadding(dp(16), dp(10), dp(16), dp(12));
+        pr.addView(text("Tones and voice prompts", 15, Tok.REGULAR, T.ink));
+        promptSeg = new Segmented(new String[]{"Off", "Tones", "Tones + voice"}, 38,
+                idx -> { send(a(0x0801, idx)); send(g(0x0802)); });
+        LinearLayout.LayoutParams pgp = new LinearLayout.LayoutParams(-1, -2);
+        pgp.topMargin = dp(8);
+        pr.addView(promptSeg.view, pgp);
+        snd.addView(pr);
+        shapeGroup(snd);
+        gate(promptSeg.view);
 
         LinearLayout hd = group(c, "Headphones");
         swOnHead = switchRowG(hd, R.drawable.ic_head, "On-head detection", null, on -> toggle(0x0400, on));
@@ -1530,7 +1568,21 @@ public class MainActivity extends Activity {
         }
         applying = true;
         switch (base) {
-            case 0x0603: if (b0 >= 0) { setValue(vBattery, b0 + " %"); batteryDots.set(b0 + "%", true, "Battery " + b0 + " percent"); } break;
+            case 0x0603: if (b0 >= 0) { batteryPct = b0; showBattery(); batteryDots.set(b0 + "%", true, "Battery " + b0 + " percent"); } break;
+            case 0x0602: if (b0 >= 0) { charging = b0 == 1; showBattery(); } break;
+            case 0x0802: if (b0 >= 0 && b0 <= 2) promptSeg.select(b0, false); break;
+            case 0x1407: if (b0 >= 0) { ownPeer = b0; showPeers(); } break;
+            case 0x1400: if (f.payload.length >= 2) {                  // count first, then each entry, never past it
+                int n = Math.min(Gaia.u16(f.payload, 0), 8);
+                peers.clear();
+                for (int i = 0; i < n; i++) send(g(0x1401, i));
+                showPeers();
+            } break;
+            case 0x1401: if (f.type() == 2 && f.payload.length >= 3) {
+                peers.put(b0, new String[]{ascii(java.util.Arrays.copyOfRange(f.payload, 3, f.payload.length)),
+                        (f.payload[2] & 0xFF) == 1 ? "1" : "0"});
+                showPeers();
+            } break;
             case 0x1206: setValue(vModel, ascii(f.payload)); modelText = ascii(f.payload); updateDeviceTile(); break;
             case 0x1201: if (f.payload.length >= 6)                          // firmware = 3 x u16 BE
                 { String fw = Gaia.u16(f.payload, 0) + "." + Gaia.u16(f.payload, 2) + "." + Gaia.u16(f.payload, 4);
@@ -1564,6 +1616,24 @@ public class MainActivity extends Activity {
             case 0x1002: if (f.type() == 1 && f.payload.length >= 5) setCurve(f.payload); break;   // 1082 notif = all 5 bands
         }
         applying = false;
+    }
+
+    private void showBattery() {
+        if (batteryPct >= 0) setValue(vBattery, batteryPct + " %" + (charging ? " · charging" : ""));
+    }
+
+    /** Devices paired with the headphones. Names stay on this screen: the log and the report hide them. */
+    private void showPeers() {
+        if (peersBox == null) return;
+        peersBox.removeAllViews();
+        for (java.util.Map.Entry<Integer, String[]> e : peers.entrySet()) {
+            final int idx = e.getKey();
+            boolean me = idx == ownPeer, on = "1".equals(e.getValue()[1]);
+            String sub = me ? "This phone" : on ? "Connected" : "Tap to connect";
+            LinearLayout r = row(peersBox, R.drawable.ic_headphones, e.getValue()[0], sub);
+            if (!me && !on) { r.setClickable(true); r.setOnClickListener(v -> { send(a(0x1402, idx)); toast("Connecting that device"); }); }
+        }
+        if (peers.isEmpty()) row(peersBox, R.drawable.ic_info, "Not read yet", "Tap Refresh");
     }
 
     private void refreshNoise() {
@@ -1890,14 +1960,15 @@ public class MainActivity extends Activity {
     private void readAllConfig() {
         if (out == null) { toast("Connect first"); return; }
         int[] gets = {0x1A05, 0x1A01, 0x1A03, 0x080D, 0x080B, 0x0818, 0x0815, 0x1607, 0x0806, 0x0401, 0x0406,
-                0x1009, 0x0804, 0x0603, 0x1206, 0x1201, 0x1200};
+                0x1009, 0x0804, 0x0603, 0x0602, 0x0802, 0x1407, 0x1206, 0x1201, 0x1200};
+        send(g(0x1400));
         for (int x : gets) send(g(x));
         send(g(0x1003, 0));                                          // all 5 EQ gains at once
     }
 
     /** Ask for change notifications (noise 0x0d, EQ 0x08, audio/device 0x04), as the official app does. */
     private void registerNotifications() {
-        for (int feat : new int[]{0x0d, 0x08, 0x04}) send(g(0x0007, feat));
+        for (int feat : new int[]{0x0d, 0x08, 0x04, 0x03}) send(g(0x0007, feat));
     }
 
     private void setTimer0() {

@@ -106,6 +106,7 @@ jobs:
           tag_name: v${{ steps.ver.outputs.ver }}
           files: dist/*.apk
           generate_release_notes: true
+          prerelease: true   # every release is a pre-release until community reports confirm it
           body: |
             MOMENTUM 4 GAIA test app, v${{ steps.ver.outputs.ver }}. Sideload on Android (allow installs from your browser, "install anyway" if Play Protect warns; it is debug-signed).
 
