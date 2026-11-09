@@ -1,0 +1,22 @@
+name: Mark releases as pre-release
+
+# One-off: flags every existing app release (tags v*) as a pre-release. Run it once from the
+# Actions tab. New releases are already published as pre-releases by release.yml.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mark:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          for tag in $(gh release list --limit 100 --json tagName --jq '.[].tagName' | grep '^v'); do
+            gh release edit "$tag" --prerelease
+            echo "pre-release: $tag"
+          done

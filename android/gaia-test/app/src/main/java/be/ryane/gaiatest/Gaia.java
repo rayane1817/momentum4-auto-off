@@ -104,7 +104,7 @@ final class Gaia {
         int type = (f.command >> 7) & 3;
         int base = f.command & ~(3 << 7);
         String t = new String[]{"cmd", "notif", "resp", "ERROR"}[type];
-        StringBuilder s = new StringBuilder(String.format("%04X:%04X %s [%s]", f.vendor, f.command, t, hex(f.payload)));
+        StringBuilder s = new StringBuilder(String.format("%04X:%04X %s [%s]", f.vendor, f.command, t, f.vendor == SENNHEISER && base == 0x1401 ? "paired device, name hidden" : hex(f.payload)));
         if (f.vendor == SENNHEISER && base == 0x0601 && type == 2 && f.payload.length >= 3) {
             int timer = f.payload[0] & 0xFF, secs = u16(f.payload, 1);
             String name = timer == 0 ? "auto power-off" : timer == 1 ? "LIMBO timeout" : "timer " + timer;
@@ -148,7 +148,7 @@ final class Gaia {
             case 0x1009: return "bass boost " + onOff(b0);
             case 0x0804: return "speech clarity " + (p.length >= 2 && u16(p, 0) == 2 ? "ON" : "off");
             case 0x1607: return "touch controls " + (b0 == 0 ? "ON" : b0 == 1 ? "off" : "?(" + b0 + ")");   // inverted
-            case 0x1407: return "1407 = " + b0 + " (meaning unknown: not a restart flag on 3.38.3, T21)";
+            case 0x1407: return "1407 = " + b0 + " (index of the device that asks)";
             case 0x1003:
             case 0x1002:                                                            // 1082 notif = 5 gains, 1102 resp = 1 gain
                 StringBuilder e = new StringBuilder("EQ dB:");
@@ -158,7 +158,10 @@ final class Gaia {
             case 0x080B: return "auto-answer calls " + onOff(b0);
             case 0x0815: return "comfort call " + onOff(b0);
             case 0x0818: return "low latency " + onOff(b0);
-            case 0x0802: return "voice/tone prompts mode = " + b0;
+            case 0x0802: return "prompts: " + (b0 == 0 ? "off" : b0 == 1 ? "tones" : b0 == 2 ? "tones and voice" : "?(" + b0 + ")");
+            case 0x0602: return "charging " + (b0 == 1 ? "yes" : "no");
+            case 0x1400: return "paired devices = " + (p.length >= 2 ? u16(p, 0) : b0);
+            case 0x1401: return p.length >= 3 ? "paired device " + b0 + (p[2] == 1 ? " (connected)" : "") : null;
             case 0x0800:                                                            // 0800 codec (resp) shares a base with 0880 audio-stream notif
                 return type == 1 ? "audio stream " + (b0 == 0xFF ? "stopped" : "active") : "codec = " + b0;
             case 0x1200: return "hw revision = " + (p.length >= 2 ? u16(p, 0) : b0);   // value in the u16, e.g. 00 04 = 4
